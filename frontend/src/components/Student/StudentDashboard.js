@@ -179,30 +179,9 @@ function StudentDashboard() {
 
       {/* SECTION TITLE */}
       <h2 className="section-title">Quick Actions</h2>
-
+      
       {/* ACTION CARDS */}
       <div className="actions-grid">
-        <div className="action-card" onClick={() => navigate("/student/quizzes")}>
-          <div className="icon-box">
-            <FileText />
-          </div>
-          <p>Quizzes & Assignments</p>
-        </div>
-
-        <div className="action-card" onClick={() => navigate("/student/lms")}>
-          <div className="icon-box">
-            <BookOpen />
-          </div>
-          <p>Learning Materials</p>
-        </div>
-
-        <div className="action-card" onClick={() => navigate("/student/leaderboard")}>
-          <div className="icon-box">
-            <Trophy />
-          </div>
-          <p>Leaderboard</p>
-        </div>
-
         <div className="action-card" onClick={() => navigate("/meeting-links")}>
           <div className="icon-box">
             <Video />
@@ -216,23 +195,63 @@ function StudentDashboard() {
           </div>
           <p>Attendance</p>
         </div>
+
+        <div className="action-card" onClick={() => navigate("/student/quizzes")}>
+          <div className="icon-box">
+            <FileText />
+          </div>
+          <p>Quizzes & Assignments</p>
+        </div>
+
+        <div className="action-card" onClick={() => navigate("/student/leaderboard")}>
+          <div className="icon-box">
+            <Trophy />
+          </div>
+          <p>Leaderboard</p>
+        </div>
+
+        <div className="action-card" onClick={() => navigate("/student/lms")}>
+          <div className="icon-box">
+            <BookOpen />
+          </div>
+          <p>Learning Materials</p>
+        </div>
       </div>
 
-      {/* Optional: Display recent attendance if available */}
+      {/* RECENT ATTENDANCE SECTION (Optional) */}
       {recentAttendance.length > 0 && (
         <div className="recent-attendance">
-          <h3>Recent Attendance</h3>
-          <ul>
-            {recentAttendance.map((att, index) => (
-              <li key={index}>
-                Meeting: {att.meetingId} - Joined: {formatDate(att.joinedAt)}
-              </li>
+          <h2 className="section-title">Recent Attendance</h2>
+          <div className="attendance-list">
+            {recentAttendance.map((record, index) => (
+              <div key={index} className="attendance-item">
+                <span className="meeting-name">Meeting: {record.meetingId?.slice(-6)}</span>
+                <span className="attendance-time">Joined: {formatDate(record.joinedAt)}</span>
+                <span className="attendance-status">
+                  {record.leftAt ? 'Left' : 'Present'}
+                </span>
+              </div>
             ))}
-          </ul>
+          </div>
+        </div>
+      )}
+
+      {/* NOTIFICATIONS SECTION (Optional) */}
+      {notifications.length > 0 && (
+        <div className="notifications-section">
+          <h2 className="section-title">Notifications</h2>
+          <div className="notifications-list">
+            {notifications.slice(0, 5).map((notif, index) => (
+              <div key={index} className="notification-item">
+                <p>{notif.message}</p>
+                <small>{new Date(notif.createdAt).toLocaleDateString()}</small>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
   );
-};
+}
 
 export default StudentDashboard;
