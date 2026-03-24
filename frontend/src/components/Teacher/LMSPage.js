@@ -78,7 +78,7 @@ const LMSPage = () => {
     
     if (file.path && file.path.startsWith('/uploads/')) {
       const baseUrl = process.env.NODE_ENV === 'production' 
-        ? 'https://live-learing.onrender.com/' 
+        ? 'https://live-learing.onrender.com' 
         : 'http://localhost:5000';
       
       return `${baseUrl}${file.path}`;
