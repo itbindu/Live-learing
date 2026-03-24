@@ -16,7 +16,7 @@ const MeetingRoom = ({ role = 'student' }) => {
   const navigate = useNavigate();
   
   // ============ ENVIRONMENT VARIABLE ============
-  const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || 'https://major-project-1-ngux.onrender.com';
+  const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || 'https://live-learing.onrender.com/';
   
   // ============ STATES ============
   const [userName, setUserName] = useState('');

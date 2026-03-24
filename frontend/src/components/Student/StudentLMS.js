@@ -53,7 +53,7 @@ const StudentLMS = () => {
     
     if (file.path && file.path.startsWith('/uploads/')) {
       const baseUrl = process.env.NODE_ENV === 'production' 
-        ? 'https://major-project-1-ngux.onrender.com' 
+        ? 'https://live-learing.onrender.com/' 
         : 'http://localhost:5000';
       
       return `${baseUrl}${file.path}`;
