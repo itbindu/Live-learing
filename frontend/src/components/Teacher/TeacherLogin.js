@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
 import "./TeacherLogin.css";
@@ -11,16 +11,18 @@ const TeacherLogin = () => {
 
   const navigate = useNavigate();
 
-  // Get API URL from environment variable
- const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000";
+  // API URL
+  const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000";
 
   const handleLogin = async (e) => {
     e.preventDefault();
+
     if (!emailOrPhone) return alert("Enter your email or phone.");
     if (!password) return alert("Enter your password.");
 
     try {
-      const response = await axios.post(`${API_URL}/api/auth/teacher/login`, {
+      // ✅ FIXED ROUTE HERE
+      const response = await axios.post(`${API_URL}/api/teachers/login`, {
         emailOrPhone,
         password,
       });
@@ -32,14 +34,19 @@ const TeacherLogin = () => {
       }
     } catch (error) {
       console.error("Login error:", error.response?.data || error.message);
-      alert("Invalid credentials or account not approved. Try again.");
+
+      // Better error message
+      alert(
+        error.response?.data?.message ||
+        "Invalid credentials . Try again."
+      );
     }
   };
 
   return (
     <div className="student-container">
       <div className="student-card">
-        {/* Left Image Section - Working teacher image */}
+
         <div className="student-image">
           <img
             src="https://images.unsplash.com/photo-1492724441997-5dc865305da7?auto=format&fit=crop&w=900&q=80"
@@ -47,9 +54,9 @@ const TeacherLogin = () => {
           />
         </div>
 
-        {/* Right Form Section */}
         <div className="student-form">
           <h2>Teacher Login</h2>
+
           <form onSubmit={handleLogin}>
             <input
               type="text"
@@ -67,6 +74,7 @@ const TeacherLogin = () => {
                 onChange={(e) => setPassword(e.target.value)}
                 required
               />
+
               <span
                 className="password-toggle"
                 onClick={() => setShowPassword(!showPassword)}
