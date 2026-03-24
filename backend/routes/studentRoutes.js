@@ -9,7 +9,7 @@ const router = express.Router();
 // Add at the top of studentRoutes.js, after the requires
 const getFrontendUrl = () => {
   return process.env.NODE_ENV === 'production' 
-    ? 'https://major-project-silk-pi.vercel.app' 
+    ? 'https://live-learing.onrender.com' 
     : 'http://localhost:3000';
 };
 // Send OTP for student registration
