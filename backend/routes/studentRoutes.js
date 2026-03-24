@@ -5,13 +5,10 @@ const Student = require('../Models/Student');
 const { generateAndSendOtp } = require('../services/otpService');
 const authenticateToken = require('../middleware/auth');
 const Meeting = require('../Models/Meeting');
+const { getFrontendUrl, getBackendUrl } = require('../utils/urlHelper');
+
 const router = express.Router();
-// Add at the top of studentRoutes.js, after the requires
-const getFrontendUrl = () => {
-  return process.env.NODE_ENV === 'production' 
-    ? 'https://live-learing.onrender.com' 
-    : 'http://localhost:3000';
-};
+
 // Send OTP for student registration
 router.post('/send-otp', async (req, res) => {
   const { email } = req.body;
@@ -53,7 +50,7 @@ router.post('/signup', async (req, res) => {
       password: hashedPassword,
       isEmailVerified: true,
       isApproved: false,
-      teachers: [] // Starts as unapproved
+      teachers: []
     });
 
     await newStudent.save();
@@ -64,7 +61,6 @@ router.post('/signup', async (req, res) => {
   }
 });
 
-// Login student
 // Login student
 router.post('/login', async (req, res) => {
   const { emailOrPhone, password } = req.body;
@@ -83,17 +79,23 @@ router.post('/login', async (req, res) => {
     if (!isMatch) return res.status(400).json({ message: 'Invalid credentials' });
 
     const token = jwt.sign({ id: user._id, email: user.email }, process.env.JWT_SECRET, { expiresIn: '24h' });
+    
     res.status(200).json({ 
       token, 
       userId: user._id,
-      frontendUrl: getFrontendUrl() 
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      frontendUrl: getFrontendUrl(),
+      backendUrl: getBackendUrl()
     });
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });
-/// Check approval (true if teachers array has entries)
+
+// Check approval (true if teachers array has entries)
 router.get('/check-approval', authenticateToken, async (req, res) => {
   try {
     const user = await Student.findById(req.user.id).populate('teachers');
@@ -105,7 +107,8 @@ router.get('/check-approval', authenticateToken, async (req, res) => {
     res.status(500).json({ message: 'Failed to check approval' });
   }
 });
-// New backend route for student profile (add to backend/routes/studentRoutes.js)
+
+// Student profile
 router.get('/profile', authenticateToken, async (req, res) => {
   try {
     const student = await Student.findById(req.user.id).select('firstName lastName email');
@@ -116,6 +119,7 @@ router.get('/profile', authenticateToken, async (req, res) => {
     res.status(500).json({ message: 'Failed to fetch profile' });
   }
 });
+
 // Get meetings from all assigned teachers
 router.get('/meetings', authenticateToken, async (req, res) => {
   try {
@@ -169,13 +173,11 @@ router.post('/join-meeting/:meetingId', async (req, res) => {
     const meeting = await Meeting.findOne({ meetingId }).populate('teacherId');
     if (!meeting || !meeting.isActive) return res.status(404).json({ message: 'Meeting not found or inactive' });
 
-    // Check if meeting's teacher is in student's teachers array
     const isAssigned = student.teachers.some(t => t._id.toString() === meeting.teacherId._id.toString());
     if (!isAssigned) {
       return res.status(403).json({ message: 'This meeting is not from your assigned teacher.' });
     }
 
-    // Add participant if not already
     const existingParticipant = meeting.participants.find(p => p.email === email);
     if (!existingParticipant) {
       meeting.participants.push({ name, email });
@@ -206,6 +208,7 @@ router.get('/meeting/:meetingId', async (req, res) => {
     res.status(500).json({ message: 'Failed to get meeting details' });
   }
 });
+
 // Get files from all teachers assigned to this student
 router.get('/lms-files', authenticateToken, async (req, res) => {
   try {
@@ -219,7 +222,6 @@ router.get('/lms-files', authenticateToken, async (req, res) => {
       return res.status(404).json({ message: 'Student not found' });
     }
 
-    // Collect files from all assigned teachers
     const allFiles = [];
 
     student.teachers.forEach(teacher => {
@@ -245,19 +247,18 @@ router.get('/lms-files', authenticateToken, async (req, res) => {
     res.status(500).json({ message: 'Failed to fetch learning materials' });
   }
 });
+
 // Get attendance history for the logged-in student
 router.get('/attendance', authenticateToken, async (req, res) => {
   try {
     const student = await Student.findById(req.user.id);
     if (!student) return res.status(404).json({ message: 'Student not found' });
     
-    // Find meetings where logs contain this student's email
     const meetings = await Meeting.find({
       'logs.email': student.email,
-      isActive: false // only past meetings
+      isActive: false
     }).populate('teacherId', 'firstName lastName').select('title meetingId logs createdAt');
     
-    // Filter logs for this student
     const attendance = meetings.map(meeting => {
       const studentLogs = meeting.logs.filter(log => log.email === student.email);
       return {
@@ -275,37 +276,5 @@ router.get('/attendance', authenticateToken, async (req, res) => {
     res.status(500).json({ message: 'Failed to fetch attendance' });
   }
 });
-// In login endpoint
-router.post('/login', async (req, res) => {
-  const { emailOrPhone, password } = req.body;
-  if (!emailOrPhone || !password) return res.status(400).json({ message: 'Email/Phone and password are required' });
 
-  try {
-    const user = await Student.findOne({
-      $or: [{ email: emailOrPhone }, { phoneNumber: emailOrPhone }],
-    });
-    if (!user) return res.status(400).json({ message: 'Invalid credentials' });
-
-    if (!user.isEmailVerified) return res.status(400).json({ message: 'Please verify your email' });
-    if (!user.isApproved) return res.status(403).json({ message: 'Account is not approved by teacher yet' });
-
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(400).json({ message: 'Invalid credentials' });
-
-    const token = jwt.sign({ id: user._id, email: user.email }, process.env.JWT_SECRET, { expiresIn: '24h' });
-    
-    // Return email along with token
-    res.status(200).json({ 
-      token, 
-      userId: user._id,
-      email: user.email, // ADD THIS
-      firstName: user.firstName,
-      lastName: user.lastName,
-      frontendUrl: getFrontendUrl() 
-    });
-  } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
 module.exports = router;

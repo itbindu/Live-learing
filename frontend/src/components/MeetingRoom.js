@@ -9,6 +9,7 @@ import {
   Wifi, WifiOff, Settings, ThumbsUp, Smile
 } from 'lucide-react';
 import BreakoutRoom from './BreakoutRoom';
+import { API_URL } from '../api/config';
 import './MeetingRoom.css';
 
 const MeetingRoom = ({ role = 'student' }) => {
@@ -16,7 +17,8 @@ const MeetingRoom = ({ role = 'student' }) => {
   const navigate = useNavigate();
   
   // ============ ENVIRONMENT VARIABLE ============
-  const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || 'https://live-learing.onrender.com';
+  // Use the configured API URL for WebSocket connection
+  const BACKEND_URL = API_URL;
   
   // ============ STATES ============
   const [userName, setUserName] = useState('');
@@ -131,7 +133,7 @@ const MeetingRoom = ({ role = 'student' }) => {
       
       localStorage.setItem(storageKey, JSON.stringify(records));
       
-      // Also try to save to server via API (optional)
+      // Also try to save to server via API
       saveAttendanceToServer(meetingId, type, record);
       
     } catch (error) {
@@ -167,278 +169,25 @@ const MeetingRoom = ({ role = 'student' }) => {
     }
   };
 
-  // ============ INITIALIZE ============
-  useEffect(() => {
-    // Generate unique user ID
-    const newUserId = `${role}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    setUserId(newUserId);
-    
-    // Get user info from localStorage based on role
-    if (role === 'teacher') {
-      const teacherData = JSON.parse(localStorage.getItem('teacherUser') || '{}');
-      const fullName = `${teacherData.firstName || ''} ${teacherData.lastName || ''}`.trim();
-      setUserName(fullName || 'Teacher');
-      setUserEmail(teacherData.email || '');
-      localStorage.setItem('teacherName', fullName || 'Teacher');
-    } else {
-      // For students
-      const studentName = localStorage.getItem('currentStudentName') || 
-                         localStorage.getItem('studentName') || 
-                         `Student_${Math.floor(Math.random() * 1000)}`;
-      const studentEmail = localStorage.getItem('studentEmail') || '';
-      
-      setUserName(studentName);
-      setUserEmail(studentEmail);
-      console.log('Student name set to:', studentName);
-      console.log('Student email set to:', studentEmail);
-    }
-
-    const storedTopic = localStorage.getItem(`meetingTopic_${meetingId}`) || 'Virtual Classroom';
-    setMeetingTopic(storedTopic);
-
-    // Initialize socket connection
-    const socket = io(BACKEND_URL, {
-      transports: ['websocket', 'polling'],
-      reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000,
-      timeout: 20000,
-      withCredentials: true,
-      path: '/socket.io/'
-    });
-    
-    socketRef.current = socket;
-
-    // Socket event handlers
-    socket.on('connect', () => {
-      console.log('✅ Connected to server');
-      setConnectionStatus('connected');
-      
-      // Join meeting with user info including email for attendance
-      socket.emit('join-meeting', {
-        meetingId,
-        userId: newUserId,
-        userName: userName,
-        role,
-        email: userEmail
-      });
-      
-      console.log('Joining meeting as:', userName, 'with role:', role, 'email:', userEmail);
-      
-      // Record attendance on join
-      saveAttendanceToLocalStorage('join', {
-        userId: newUserId,
-        userName: userName,
-        email: userEmail,
-        role: role,
-        joinedAt: new Date().toISOString()
-      });
-    });
-
-    socket.on('connect_error', (error) => {
-      console.error('❌ Connection error:', error);
-      setConnectionStatus('error');
-    });
-
-    socket.on('disconnect', () => {
-      console.log('❌ Disconnected');
-      setConnectionStatus('connecting');
-    });
-
-    // Receive all existing users when joining
-    socket.on('all-users', (users) => {
-      console.log('👥 All users received:', users);
-      const usersWithNames = users.map(user => ({
-        ...user,
-        userName: user.userName || user.name || 'Unknown User'
-      }));
-      setParticipants(usersWithNames);
-      setParticipantCount(usersWithNames.length + 1);
-      
-      setTimeout(() => {
-        usersWithNames.forEach(user => {
-          if (user.userId !== newUserId) {
-            createPeerConnection(user.userId);
-          }
-        });
-      }, 1000);
-    });
-
-    // Handle new user joining
-    socket.on('user-joined', (user) => {
-      console.log('👤 User joined with data:', user);
-      if (user.userId === newUserId) return;
-      
-      const newUser = {
-        ...user,
-        userName: user.userName || user.name || 'New User'
-      };
-      
-      setParticipants(prev => {
-        const exists = prev.some(p => p.userId === newUser.userId);
-        if (exists) return prev;
-        return [...prev, newUser];
-      });
-      setParticipantCount(prev => prev + 1);
-      
-      if (!peerConnections.current[newUser.userId]) {
-        createPeerConnection(newUser.userId);
-      }
-
-      if (isScreenSharing && screenStreamRef.current) {
-        setTimeout(() => {
-          createScreenPeerConnection(newUser.userId, screenStreamRef.current);
-        }, 1000);
-      }
-    });
-
-    // Attendance recording from server
-    socket.on('attendance-recorded', (data) => {
-      console.log('📊 Attendance recorded from server:', data);
-      saveAttendanceToLocalStorage(data.type, data.record);
-    });
-
-    socket.on('receive-offer', handleReceiveOffer);
-    socket.on('receive-answer', handleReceiveAnswer);
-    socket.on('receive-ice-candidate', handleReceiveICECandidate);
-    
-    // Screen sharing events
-    socket.on('screen-share-started', ({ userId: sharerId, userName: sharerName }) => {
-      console.log('📺 Screen sharing started by:', sharerName);
-      setScreenShareParticipant({ userId: sharerId, userName: sharerName });
-      setHasScreenShare(true);
-      
-      if (sharerId !== userId) {
-        ensureScreenShareContainer(sharerName);
-      }
-    });
-
-    socket.on('screen-share-stopped', ({ userId: sharerId }) => {
-      console.log('📺 Screen sharing stopped by:', sharerId);
-      
-      if (screenShareParticipant?.userId === sharerId) {
-        setScreenShareParticipant(null);
-        setHasScreenShare(false);
-        
-        const screenContainer = document.getElementById('screen-share-container');
-        if (screenContainer) {
-          screenContainer.remove();
-        }
-      }
-      
-      if (screenPeerConnections.current[sharerId]) {
-        screenPeerConnections.current[sharerId].close();
-        delete screenPeerConnections.current[sharerId];
-      }
-    });
-
-    socket.on('receive-screen-offer', handleReceiveScreenOffer);
-    socket.on('receive-screen-answer', handleReceiveScreenAnswer);
-    socket.on('receive-screen-ice-candidate', handleReceiveScreenICECandidate);
-    
-    // Handle user leaving
-    socket.on('user-left', (leftUserId) => {
-      console.log('👋 User left:', leftUserId);
-      
-      if (peerConnections.current[leftUserId]) {
-        peerConnections.current[leftUserId].close();
-        delete peerConnections.current[leftUserId];
-      }
-      
-      if (screenPeerConnections.current[leftUserId]) {
-        screenPeerConnections.current[leftUserId].close();
-        delete screenPeerConnections.current[leftUserId];
-      }
-
-      if (screenShareParticipant?.userId === leftUserId) {
-        setScreenShareParticipant(null);
-        setHasScreenShare(false);
-        const screenContainer = document.getElementById('screen-share-container');
-        if (screenContainer) screenContainer.remove();
-      }
-      
-      setParticipants(prev => prev.filter(p => p.userId !== leftUserId));
-      setParticipantCount(prev => prev - 1);
-    });
-
-    socket.on('chat-message', (message) => {
-      setMessages(prev => [...prev, message]);
-      if (!showChat) setUnreadMessages(prev => prev + 1);
-    });
-
-    socket.on('media-state-changed', (data) => {
-      setParticipants(prev => prev.map(p => 
-        p.userId === data.userId 
-          ? { ...p, audioEnabled: data.audioEnabled, videoEnabled: data.videoEnabled }
-          : p
-      ));
-    });
-
-    socket.on('meeting-ended', () => {
-      alert('Meeting ended by host');
-      
-      // Record final attendance on meeting end
-      saveAttendanceToLocalStorage('leave', {
-        userId: newUserId,
-        userName: userName,
-        role: role,
-        leftAt: new Date().toISOString()
-      });
-      
-      navigate(role === 'teacher' ? '/teacher/dashboard' : '/student/dashboard');
-    });
-
-    // Cleanup on unmount
-    return () => {
-      // Record attendance on component unmount (user leaving)
-      if (userId) {
-        saveAttendanceToLocalStorage('leave', {
-          userId: userId,
-          userName: userName,
-          role: role,
-          leftAt: new Date().toISOString()
-        });
-      }
-      
-      Object.values(peerConnections.current).forEach(pc => pc.close());
-      Object.values(screenPeerConnections.current).forEach(pc => pc.close());
-      
-      if (localStreamRef.current) {
-        localStreamRef.current.getTracks().forEach(track => track.stop());
-      }
-      if (screenStreamRef.current) {
-        screenStreamRef.current.getTracks().forEach(track => track.stop());
-      }
-      if (socketRef.current) {
-        socketRef.current.emit('leave-meeting', { meetingId, userId });
-        socketRef.current.disconnect();
-      }
-    };
-  }, [meetingId, role, userName, userEmail]);
-
   // ============ MEDIA FUNCTIONS ============
-  useEffect(() => {
-    const initLocalStream = async () => {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-          audio: true
-        });
-        
-        localStreamRef.current = stream;
-        
-        if (localVideoRef.current) {
-          localVideoRef.current.srcObject = stream;
-        }
-      } catch (error) {
-        console.error('Error accessing media:', error);
-        setCameraOn(false);
-        setMicOn(false);
+  const initLocalStream = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: true
+      });
+      
+      localStreamRef.current = stream;
+      
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = stream;
       }
-    };
-
-    initLocalStream();
-  }, []);
+    } catch (error) {
+      console.error('Error accessing media:', error);
+      setCameraOn(false);
+      setMicOn(false);
+    }
+  };
 
   const toggleMic = () => {
     if (localStreamRef.current) {
@@ -924,6 +673,258 @@ const MeetingRoom = ({ role = 'student' }) => {
     socketRef.current?.emit('end-meeting', { meetingId });
     navigate('/teacher/dashboard');
   };
+
+  // ============ INITIALIZE ============
+  useEffect(() => {
+    // Generate unique user ID
+    const newUserId = `${role}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    setUserId(newUserId);
+    
+    // Get user info from localStorage based on role
+    if (role === 'teacher') {
+      const teacherData = JSON.parse(localStorage.getItem('teacherUser') || '{}');
+      const fullName = `${teacherData.firstName || ''} ${teacherData.lastName || ''}`.trim();
+      setUserName(fullName || 'Teacher');
+      setUserEmail(teacherData.email || '');
+      localStorage.setItem('teacherName', fullName || 'Teacher');
+    } else {
+      // For students
+      const studentName = localStorage.getItem('currentStudentName') || 
+                         localStorage.getItem('studentName') || 
+                         `Student_${Math.floor(Math.random() * 1000)}`;
+      const studentEmail = localStorage.getItem('studentEmail') || '';
+      
+      setUserName(studentName);
+      setUserEmail(studentEmail);
+      console.log('Student name set to:', studentName);
+      console.log('Student email set to:', studentEmail);
+    }
+
+    const storedTopic = localStorage.getItem(`meetingTopic_${meetingId}`) || 'Virtual Classroom';
+    setMeetingTopic(storedTopic);
+
+    // Initialize socket connection
+    const socket = io(BACKEND_URL, {
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
+      timeout: 20000,
+      withCredentials: true,
+      path: '/socket.io/'
+    });
+    
+    socketRef.current = socket;
+
+    // Initialize local media stream
+    initLocalStream();
+
+    // Socket event handlers
+    socket.on('connect', () => {
+      console.log('✅ Connected to server at:', BACKEND_URL);
+      setConnectionStatus('connected');
+      
+      // Join meeting with user info including email for attendance
+      socket.emit('join-meeting', {
+        meetingId,
+        userId: newUserId,
+        userName: userName,
+        role,
+        email: userEmail
+      });
+      
+      console.log('Joining meeting as:', userName, 'with role:', role, 'email:', userEmail);
+      
+      // Record attendance on join
+      saveAttendanceToLocalStorage('join', {
+        userId: newUserId,
+        userName: userName,
+        email: userEmail,
+        role: role,
+        joinedAt: new Date().toISOString()
+      });
+    });
+
+    socket.on('connect_error', (error) => {
+      console.error('❌ Connection error:', error);
+      setConnectionStatus('error');
+    });
+
+    socket.on('disconnect', () => {
+      console.log('❌ Disconnected');
+      setConnectionStatus('connecting');
+    });
+
+    // Receive all existing users when joining
+    socket.on('all-users', (users) => {
+      console.log('👥 All users received:', users);
+      const usersWithNames = users.map(user => ({
+        ...user,
+        userName: user.userName || user.name || 'Unknown User'
+      }));
+      setParticipants(usersWithNames);
+      setParticipantCount(usersWithNames.length + 1);
+      
+      setTimeout(() => {
+        usersWithNames.forEach(user => {
+          if (user.userId !== newUserId) {
+            createPeerConnection(user.userId);
+          }
+        });
+      }, 1000);
+    });
+
+    // Handle new user joining
+    socket.on('user-joined', (user) => {
+      console.log('👤 User joined with data:', user);
+      if (user.userId === newUserId) return;
+      
+      const newUser = {
+        ...user,
+        userName: user.userName || user.name || 'New User'
+      };
+      
+      setParticipants(prev => {
+        const exists = prev.some(p => p.userId === newUser.userId);
+        if (exists) return prev;
+        return [...prev, newUser];
+      });
+      setParticipantCount(prev => prev + 1);
+      
+      if (!peerConnections.current[newUser.userId]) {
+        createPeerConnection(newUser.userId);
+      }
+
+      if (isScreenSharing && screenStreamRef.current) {
+        setTimeout(() => {
+          createScreenPeerConnection(newUser.userId, screenStreamRef.current);
+        }, 1000);
+      }
+    });
+
+    // Attendance recording from server
+    socket.on('attendance-recorded', (data) => {
+      console.log('📊 Attendance recorded from server:', data);
+      saveAttendanceToLocalStorage(data.type, data.record);
+    });
+
+    socket.on('receive-offer', handleReceiveOffer);
+    socket.on('receive-answer', handleReceiveAnswer);
+    socket.on('receive-ice-candidate', handleReceiveICECandidate);
+    
+    // Screen sharing events
+    socket.on('screen-share-started', ({ userId: sharerId, userName: sharerName }) => {
+      console.log('📺 Screen sharing started by:', sharerName);
+      setScreenShareParticipant({ userId: sharerId, userName: sharerName });
+      setHasScreenShare(true);
+      
+      if (sharerId !== userId) {
+        ensureScreenShareContainer(sharerName);
+      }
+    });
+
+    socket.on('screen-share-stopped', ({ userId: sharerId }) => {
+      console.log('📺 Screen sharing stopped by:', sharerId);
+      
+      if (screenShareParticipant?.userId === sharerId) {
+        setScreenShareParticipant(null);
+        setHasScreenShare(false);
+        
+        const screenContainer = document.getElementById('screen-share-container');
+        if (screenContainer) {
+          screenContainer.remove();
+        }
+      }
+      
+      if (screenPeerConnections.current[sharerId]) {
+        screenPeerConnections.current[sharerId].close();
+        delete screenPeerConnections.current[sharerId];
+      }
+    });
+
+    socket.on('receive-screen-offer', handleReceiveScreenOffer);
+    socket.on('receive-screen-answer', handleReceiveScreenAnswer);
+    socket.on('receive-screen-ice-candidate', handleReceiveScreenICECandidate);
+    
+    // Handle user leaving
+    socket.on('user-left', (leftUserId) => {
+      console.log('👋 User left:', leftUserId);
+      
+      if (peerConnections.current[leftUserId]) {
+        peerConnections.current[leftUserId].close();
+        delete peerConnections.current[leftUserId];
+      }
+      
+      if (screenPeerConnections.current[leftUserId]) {
+        screenPeerConnections.current[leftUserId].close();
+        delete screenPeerConnections.current[leftUserId];
+      }
+
+      if (screenShareParticipant?.userId === leftUserId) {
+        setScreenShareParticipant(null);
+        setHasScreenShare(false);
+        const screenContainer = document.getElementById('screen-share-container');
+        if (screenContainer) screenContainer.remove();
+      }
+      
+      setParticipants(prev => prev.filter(p => p.userId !== leftUserId));
+      setParticipantCount(prev => prev - 1);
+    });
+
+    socket.on('chat-message', (message) => {
+      setMessages(prev => [...prev, message]);
+      if (!showChat) setUnreadMessages(prev => prev + 1);
+    });
+
+    socket.on('media-state-changed', (data) => {
+      setParticipants(prev => prev.map(p => 
+        p.userId === data.userId 
+          ? { ...p, audioEnabled: data.audioEnabled, videoEnabled: data.videoEnabled }
+          : p
+      ));
+    });
+
+    socket.on('meeting-ended', () => {
+      alert('Meeting ended by host');
+      
+      // Record final attendance on meeting end
+      saveAttendanceToLocalStorage('leave', {
+        userId: newUserId,
+        userName: userName,
+        role: role,
+        leftAt: new Date().toISOString()
+      });
+      
+      navigate(role === 'teacher' ? '/teacher/dashboard' : '/student/dashboard');
+    });
+
+    // Cleanup on unmount
+    return () => {
+      // Record attendance on component unmount (user leaving)
+      if (userId) {
+        saveAttendanceToLocalStorage('leave', {
+          userId: userId,
+          userName: userName,
+          role: role,
+          leftAt: new Date().toISOString()
+        });
+      }
+      
+      Object.values(peerConnections.current).forEach(pc => pc.close());
+      Object.values(screenPeerConnections.current).forEach(pc => pc.close());
+      
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach(track => track.stop());
+      }
+      if (screenStreamRef.current) {
+        screenStreamRef.current.getTracks().forEach(track => track.stop());
+      }
+      if (socketRef.current) {
+        socketRef.current.emit('leave-meeting', { meetingId, userId });
+        socketRef.current.disconnect();
+      }
+    };
+  }, [meetingId, role, userName, userEmail]);
 
   // ============ RENDER ============
   const totalParticipants = participants.length + 1;

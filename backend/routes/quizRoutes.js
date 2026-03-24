@@ -5,13 +5,9 @@ const Student = require('../Models/Student');
 const Submission = require('../Models/Submission');
 const authenticateToken = require('../middleware/auth');
 const nodemailer = require('nodemailer');
-const router = express.Router();
+const { getFrontendUrl } = require('../utils/urlHelper');
 
-const getFrontendUrl = () => {
-  return process.env.NODE_ENV === 'production' 
-    ? 'https://live-learing.onrender.com' 
-    : 'http://localhost:3000';
-};
+const router = express.Router();
 
 const transporter = nodemailer.createTransport({
   service: 'gmail',
@@ -21,9 +17,7 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-// ─────────────────────────────────────────────
 // CREATE QUIZ (Teacher only)
-// ─────────────────────────────────────────────
 router.post('/create', authenticateToken, async (req, res) => {
   const { title, questions, timeLimit } = req.body;
   
@@ -48,7 +42,6 @@ router.post('/create', authenticateToken, async (req, res) => {
     const assignedStudents = teacher.students || [];
     const frontendUrl = getFrontendUrl();
 
-    // Send notifications to all assigned students
     const emailPromises = assignedStudents.map(async (student) => {
       try {
         await transporter.sendMail({
@@ -103,9 +96,7 @@ router.post('/create', authenticateToken, async (req, res) => {
   }
 });
 
-// ─────────────────────────────────────────────
 // LIST QUIZZES FOR STUDENT (with submitted flag)
-// ─────────────────────────────────────────────
 router.get('/list', authenticateToken, async (req, res) => {
   try {
     console.log('Fetching quiz list for student:', req.user.id);
@@ -173,9 +164,7 @@ router.get('/list', authenticateToken, async (req, res) => {
   }
 });
 
-// ─────────────────────────────────────────────
 // TEACHER'S QUIZZES
-// ─────────────────────────────────────────────
 router.get('/my-quizzes', authenticateToken, async (req, res) => {
   try {
     const quizzes = await Quiz.find({ teacherId: req.user.id })
@@ -189,9 +178,7 @@ router.get('/my-quizzes', authenticateToken, async (req, res) => {
   }
 });
 
-// ─────────────────────────────────────────────
 // STUDENT LEADERBOARD (My Performance)
-// ─────────────────────────────────────────────
 router.get('/student/leaderboard', authenticateToken, async (req, res) => {
   try {
     const student = await Student.findById(req.user.id);
@@ -225,9 +212,7 @@ router.get('/student/leaderboard', authenticateToken, async (req, res) => {
   }
 });
 
-// ─────────────────────────────────────────────
 // CHECK IF STUDENT HAS ALREADY SUBMITTED
-// ─────────────────────────────────────────────
 router.get('/check-submission/:quizId', authenticateToken, async (req, res) => {
   try {
     const submission = await Submission.findOne({
@@ -241,9 +226,7 @@ router.get('/check-submission/:quizId', authenticateToken, async (req, res) => {
   }
 });
 
-// ─────────────────────────────────────────────
 // GET QUIZ STATISTICS (Teacher only)
-// ─────────────────────────────────────────────
 router.get('/:quizId/stats', authenticateToken, async (req, res) => {
   try {
     const quiz = await Quiz.findById(req.params.quizId);
@@ -279,9 +262,7 @@ router.get('/:quizId/stats', authenticateToken, async (req, res) => {
   }
 });
 
-// ─────────────────────────────────────────────
 // GET LEADERBOARD FOR SPECIFIC QUIZ (Teacher view)
-// ─────────────────────────────────────────────
 router.get('/:quizId/leaderboard', authenticateToken, async (req, res) => {
   try {
     const quiz = await Quiz.findById(req.params.quizId);
@@ -315,9 +296,7 @@ router.get('/:quizId/leaderboard', authenticateToken, async (req, res) => {
   }
 });
 
-// ─────────────────────────────────────────────
 // SUBMIT QUIZ (with proctoring data)
-// ─────────────────────────────────────────────
 router.post('/submit/:quizId', authenticateToken, async (req, res) => {
   const { answers, proctoringData } = req.body;
   
@@ -398,9 +377,7 @@ router.post('/submit/:quizId', authenticateToken, async (req, res) => {
   }
 });
 
-// ─────────────────────────────────────────────
 // UPDATE QUIZ (Teacher only)
-// ─────────────────────────────────────────────
 router.put('/:id', authenticateToken, async (req, res) => {
   const { title, questions, timeLimit } = req.body;
   
@@ -432,9 +409,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// ─────────────────────────────────────────────
 // DELETE QUIZ (Teacher only)
-// ─────────────────────────────────────────────
 router.delete('/:id', authenticateToken, async (req, res) => {
   try {
     const quiz = await Quiz.findById(req.params.id);
@@ -460,9 +435,7 @@ router.delete('/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// ─────────────────────────────────────────────
-// GET SINGLE QUIZ (Must be last)
-// ─────────────────────────────────────────────
+// GET SINGLE QUIZ
 router.get('/:id', authenticateToken, async (req, res) => {
   try {
     console.log('Fetching single quiz with ID:', req.params.id);

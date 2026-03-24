@@ -11,7 +11,6 @@ router.get('/meeting/:meetingId', authenticateToken, async (req, res) => {
   try {
     const { meetingId } = req.params;
     
-    // Verify teacher owns this meeting
     const meeting = await Meeting.findOne({ 
       meetingId,
       teacherId: req.user.id 
@@ -28,7 +27,7 @@ router.get('/meeting/:meetingId', authenticateToken, async (req, res) => {
         title: meeting.title,
         createdAt: meeting.createdAt,
         attendance: meeting.attendance || [],
-        logs: meeting.logs || [] // for backward compatibility
+        logs: meeting.logs || []
       }
     });
   } catch (error) {
@@ -74,7 +73,6 @@ router.get('/student', authenticateToken, async (req, res) => {
       return res.status(404).json({ message: 'Student not found' });
     }
     
-    // Find all meetings where this student appears in attendance
     const meetings = await Meeting.find({
       'attendance.userId': req.user.id
     })
@@ -83,18 +81,15 @@ router.get('/student', authenticateToken, async (req, res) => {
     .sort({ createdAt: -1 });
     
     const studentAttendance = meetings.map(meeting => {
-      // Get only this student's attendance records
       const myAttendance = meeting.attendance?.filter(
         a => a.userId === req.user.id
       ) || [];
       
-      // Calculate total time in meeting
       let totalDuration = 0;
       myAttendance.forEach(record => {
         if (record.duration) {
           totalDuration += record.duration;
         } else if (record.joinedAt && !record.leftAt) {
-          // Still active? shouldn't happen for past meetings
           const now = new Date();
           const joinTime = new Date(record.joinedAt).getTime();
           totalDuration += Math.round((now - joinTime) / 1000);
@@ -135,7 +130,6 @@ router.post('/record', authenticateToken, async (req, res) => {
     }
     
     if (type === 'join') {
-      // Check if already active
       const existing = meeting.attendance.find(
         a => a.userId === record.userId && a.isActive === true
       );
@@ -186,7 +180,6 @@ router.get('/export/:meetingId', authenticateToken, async (req, res) => {
       return res.status(404).json({ message: 'Meeting not found' });
     }
     
-    // Check authorization (teacher or student in meeting)
     const isTeacher = meeting.teacherId.toString() === req.user.id;
     const isStudent = meeting.attendance.some(a => a.userId === req.user.id);
     
@@ -194,11 +187,9 @@ router.get('/export/:meetingId', authenticateToken, async (req, res) => {
       return res.status(403).json({ message: 'Unauthorized' });
     }
     
-    // Generate CSV
     const attendance = meeting.attendance || [];
     const csvRows = [];
     
-    // Headers
     csvRows.push([
       'Name',
       'Email',
@@ -209,7 +200,6 @@ router.get('/export/:meetingId', authenticateToken, async (req, res) => {
       'Status'
     ].join(','));
     
-    // Data rows
     attendance.forEach(record => {
       const joinedAt = record.joinedAt ? new Date(record.joinedAt).toISOString() : '';
       const leftAt = record.leftAt ? new Date(record.leftAt).toISOString() : '';

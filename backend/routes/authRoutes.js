@@ -5,12 +5,13 @@ const { generateAndSendOtp, verifyOtp } = require('../services/otpService');
 const authenticateToken = require('../middleware/auth');
 const Teacher = require('../Models/Teacher');
 const Student = require('../Models/Student');
+const { getFrontendUrl } = require('../utils/urlHelper');
 
 const router = express.Router();
 
 // Forgot Password - Send OTP
 router.post('/forgot-password/send-otp', async (req, res) => {
-  const { email, userType } = req.body; // userType: 'teacher' or 'student'
+  const { email, userType } = req.body;
   if (!email || !userType) return res.status(400).json({ message: 'Email and user type are required' });
 
   let UserModel = userType === 'teacher' ? Teacher : Student;

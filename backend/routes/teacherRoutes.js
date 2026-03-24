@@ -1,4 +1,4 @@
-// backend/routes/teacherRoutes.js - Complete version with filename cleaning
+// backend/routes/teacherRoutes.js - Updated with URL helper
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
@@ -13,15 +13,9 @@ const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const { generateAndSendOtp } = require('../services/otpService');
 const authenticateToken = require('../middleware/auth');
 const { sendEmail } = require('../services/emailService');
+const { getFrontendUrl, getBackendUrl } = require('../utils/urlHelper');
 
 const router = express.Router();
-
-// ============ GET FRONTEND URL ============
-const getFrontendUrl = () => {
-  return process.env.NODE_ENV === 'production' 
-    ? 'https://live-learing.onrender.com' 
-    : 'http://localhost:3000';
-};
 
 // ============ CLOUDINARY CONFIGURATION ============
 cloudinary.config({
@@ -40,7 +34,6 @@ const storage = new CloudinaryStorage({
     resource_type: 'auto',
     public_id: (req, file) => {
       const timestamp = Date.now();
-      // Remove extension from original name
       const originalName = file.originalname;
       const lastDotIndex = originalName.lastIndexOf('.');
       let baseName = originalName;
@@ -49,7 +42,6 @@ const storage = new CloudinaryStorage({
         baseName = originalName.substring(0, lastDotIndex);
       }
       
-      // Clean the filename
       const sanitizedName = baseName.replace(/[^a-zA-Z0-9]/g, '_');
       return `${timestamp}-${sanitizedName}`;
     }
@@ -58,28 +50,20 @@ const storage = new CloudinaryStorage({
 
 // File filter - accept ALL common file types
 const fileFilter = (req, file, cb) => {
-  // Allow all file types
   const allowedTypes = [
-    // Images
     'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml', 'image/bmp', 'image/tiff',
-    // Documents
     'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     'application/vnd.ms-powerpoint', 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
     'text/plain', 'text/csv', 'text/markdown', 'text/html', 'text/rtf',
-    // Videos
     'video/mp4', 'video/webm', 'video/ogg', 'video/quicktime', 'video/x-msvideo', 'video/x-matroska',
     'video/mpeg', 'video/3gpp', 'video/mp2t',
-    // Audio
     'audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/mp3', 'audio/m4a', 'audio/aac', 'audio/flac',
-    // Archives
     'application/zip', 'application/x-zip-compressed', 'application/x-rar-compressed',
     'application/x-7z-compressed', 'application/x-tar', 'application/gzip',
-    // Other
     'application/json', 'application/xml', 'application/rtf', 'application/octet-stream'
   ];
 
-  // Allow all common file extensions
   const allowedExtensions = [
     '.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.bmp', '.tiff',
     '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.txt', '.csv', '.md', '.html', '.rtf',
@@ -89,23 +73,20 @@ const fileFilter = (req, file, cb) => {
     '.json', '.xml'
   ];
 
-  // Check by mimetype or extension
   const ext = path.extname(file.originalname).toLowerCase();
   
   if (allowedTypes.includes(file.mimetype) || allowedExtensions.includes(ext)) {
     cb(null, true);
   } else {
     console.log(`⚠️ File type may not be supported: ${file.mimetype}, ${ext}`);
-    // Still allow it - let Cloudinary handle it
     cb(null, true);
   }
 };
 
-// Configure multer with Cloudinary storage
 const upload = multer({ 
   storage: storage,
   limits: { 
-    fileSize: 500 * 1024 * 1024 // 500MB max file size
+    fileSize: 500 * 1024 * 1024
   },
   fileFilter: fileFilter
 });
@@ -189,7 +170,14 @@ router.post('/login', async (req, res) => {
       id: user._id
     };
     
-    res.status(200).json({ token, userId: user._id, user: userData, role: 'teacher' });
+    res.status(200).json({ 
+      token, 
+      userId: user._id, 
+      user: userData, 
+      role: 'teacher',
+      frontendUrl: getFrontendUrl(),
+      backendUrl: getBackendUrl()
+    });
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -501,7 +489,6 @@ router.post('/upload-file', authenticateToken, upload.array('file', 20), async (
     for (const file of req.files) {
       console.log(`✅ File uploaded to Cloudinary: ${file.path}`);
       
-      // Determine file category
       let category = 'other';
       const mimetype = file.mimetype || '';
       const filename = file.originalname.toLowerCase();
@@ -645,72 +632,6 @@ router.patch('/file/:fileId', authenticateToken, async (req, res) => {
   }
 });
 
-// ============ FILENAME CLEANUP ROUTE ============
-router.post('/clean-filenames', authenticateToken, async (req, res) => {
-  try {
-    const teacher = await Teacher.findById(req.user.id);
-    if (!teacher) {
-      return res.status(404).json({ message: 'Teacher not found' });
-    }
-
-    let cleanedCount = 0;
-    const cleanedFiles = [];
-
-    teacher.files.forEach(file => {
-      let originalFilename = file.filename;
-      let newFilename = originalFilename;
-
-      // Fix double .pdf.pdf issue
-      while (newFilename.includes('.pdf.pdf')) {
-        newFilename = newFilename.replace('.pdf.pdf', '.pdf');
-      }
-      while (newFilename.includes('.PDF.pdf')) {
-        newFilename = newFilename.replace('.PDF.pdf', '.pdf');
-      }
-      while (newFilename.includes('.pdf.PDF')) {
-        newFilename = newFilename.replace('.pdf.PDF', '.pdf');
-      }
-      while (newFilename.includes('.PDF.PDF')) {
-        newFilename = newFilename.replace('.PDF.PDF', '.pdf');
-      }
-      
-      // Fix other potential double extensions
-      const extensions = ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.jpg', '.jpeg', '.png', '.gif', '.mp4', '.mp3', '.zip'];
-      extensions.forEach(ext => {
-        const doubleExt = ext + ext;
-        while (newFilename.includes(doubleExt)) {
-          newFilename = newFilename.replace(doubleExt, ext);
-        }
-      });
-
-      if (originalFilename !== newFilename) {
-        file.filename = newFilename;
-        cleanedCount++;
-        cleanedFiles.push({
-          id: file._id,
-          old: originalFilename,
-          new: newFilename
-        });
-      }
-    });
-
-    if (cleanedCount > 0) {
-      await teacher.save();
-      console.log(`✅ Cleaned ${cleanedCount} filenames for teacher ${req.user.id}`);
-    }
-
-    res.json({
-      success: true,
-      message: `Cleaned ${cleanedCount} filenames`,
-      cleanedFiles: cleanedFiles
-    });
-
-  } catch (error) {
-    console.error('Clean filenames error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
 // ============ DASHBOARD STATS ============
 router.get('/stats', authenticateToken, async (req, res) => {
   try {
@@ -731,62 +652,6 @@ router.get('/stats', authenticateToken, async (req, res) => {
   }
 });
 
-// ============ DEBUG ROUTE ============
-router.get('/debug-files', authenticateToken, async (req, res) => {
-  try {
-    const teacher = await Teacher.findById(req.user.id);
-    const files = teacher.files || [];
-    
-    const fileInfo = files.map(f => ({
-      filename: f.filename,
-      path: f.path,
-      category: f.category,
-      fileType: f.fileType,
-      fileSize: f.fileSize,
-      isCloudinary: f.path?.includes('cloudinary') || false,
-      isLocal: f.path?.startsWith('/uploads/') || false,
-      id: f._id
-    }));
-    
-    res.json({
-      totalFiles: files.length,
-      cloudinaryFiles: fileInfo.filter(f => f.isCloudinary).length,
-      localFiles: fileInfo.filter(f => f.isLocal).length,
-      files: fileInfo
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// ============ CHECK FILE EXISTENCE ============
-router.get('/check-file/:filename', authenticateToken, async (req, res) => {
-  try {
-    const { filename } = req.params;
-    const filePath = path.join(__dirname, '../uploads', filename);
-    
-    const exists = fs.existsSync(filePath);
-    
-    if (exists) {
-      const stats = fs.statSync(filePath);
-      res.json({
-        exists: true,
-        filename,
-        path: filePath,
-        size: stats.size,
-        isFile: stats.isFile()
-      });
-    } else {
-      res.json({
-        exists: false,
-        filename,
-        path: filePath
-      });
-    }
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
 // Get attendance logs for a specific meeting (teacher only)
 router.get('/meeting-attendance/:meetingId', authenticateToken, async (req, res) => {
   try {
