@@ -15,7 +15,7 @@ const server = http.createServer(app);
 
 // ================== CORS CONFIG ==================
 const allowedOrigins = [
-  "https://live-learing.vercel.app/",
+  "https://live-learing.vercel.app",
   "http://localhost:3000"
 ];
 
