@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
+import api from "../../api/config";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
 import "./TeacherRegister.css";
 
@@ -15,11 +15,11 @@ const TeacherRegister = () => {
   const [isOtpSent, setIsOtpSent] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
   const navigate = useNavigate();
-
-  // Get API URL from environment variable
-  const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000";
 
   const isValidName = (name) => /^[A-Za-z]{2,}$/.test(name);
   const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -30,66 +30,144 @@ const TeacherRegister = () => {
   // ---------- SEND OTP ----------
   const handleSendOtp = async (e) => {
     e.preventDefault();
-    if (!isValidName(firstName)) return alert("First name must be at least 2 letters.");
-    if (!isValidName(lastName)) return alert("Last name must be at least 2 letters.");
-    if (!isValidEmail(email)) return alert("Invalid email address.");
-    if (!isValidPhone(phoneNumber)) return alert("Enter a valid 10-digit phone number.");
+    setError("");
+    setSuccess("");
+    
+    // Validation
+    if (!isValidName(firstName)) {
+      setError("First name must be at least 2 letters and only alphabets.");
+      return;
+    }
+    if (!isValidName(lastName)) {
+      setError("Last name must be at least 2 letters and only alphabets.");
+      return;
+    }
+    if (!isValidEmail(email)) {
+      setError("Invalid email address.");
+      return;
+    }
+    if (!isValidPhone(phoneNumber)) {
+      setError("Enter a valid 10-digit phone number starting with 6-9.");
+      return;
+    }
+
+    setLoading(true);
 
     try {
-      const response = await axios.post(`${API_URL}/api/teachers/send-otp`, { email });
-      if (response.data.success) {
-        alert(response.data.message);
+      // Use the correct endpoint from authRoutes
+      const response = await api.post("/api/auth/forgot-password/send-otp", { 
+        email, 
+        userType: "teacher" 
+      });
+      
+      if (response.data.message) {
+        setSuccess("OTP sent successfully! Please check your email.");
         setIsOtpSent(true);
       } else {
-        alert(response.data.message);
+        setError(response.data.message || "Failed to send OTP.");
       }
     } catch (error) {
       console.error("Error sending OTP:", error.response?.data || error.message);
-      alert("Failed to send OTP. Try again.");
+      setError(error.response?.data?.message || "Failed to send OTP. Try again.");
+    } finally {
+      setLoading(false);
     }
   };
 
   // ---------- VERIFY OTP ----------
   const handleVerifyOtp = async (e) => {
     e.preventDefault();
-    if (!otp) return alert("Enter the OTP.");
+    setError("");
+    setSuccess("");
+    
+    if (!otp || otp.length !== 6) {
+      setError("Please enter a valid 6-digit OTP.");
+      return;
+    }
+
+    setLoading(true);
 
     try {
-      const response = await axios.post(`${API_URL}/api/teachers/verify-otp`, { email, otp });
-      if (response.data.success) {
-        alert("OTP verified! Creating account...");
-        handleSignup();
+      // Verify OTP using auth endpoint
+      const response = await api.post("/api/auth/forgot-password/verify-otp", { 
+        email, 
+        otp, 
+        userType: "teacher" 
+      });
+      
+      if (response.data.message === "OTP verified") {
+        setSuccess("OTP verified! Creating account...");
+        // Proceed to signup
+        await handleSignup();
       } else {
-        alert(response.data.message);
+        setError(response.data.message || "Invalid OTP.");
       }
     } catch (error) {
       console.error("OTP verification failed:", error.response?.data || error.message);
-      alert("Invalid OTP. Try again.");
+      setError(error.response?.data?.message || "Invalid OTP. Try again.");
+    } finally {
+      setLoading(false);
     }
   };
 
   // ---------- SIGNUP ----------
   const handleSignup = async () => {
-    if (!password || !confirmPassword) return alert("Please enter password and confirm it.");
-    if (!isValidPassword(password))
-      return alert("Password must be 8+ chars, 1 uppercase, 1 number & 1 special char.");
-    if (password !== confirmPassword) return alert("Passwords do not match.");
+    if (!password || !confirmPassword) {
+      setError("Please enter password and confirm it.");
+      return;
+    }
+    if (!isValidPassword(password)) {
+      setError("Password must be 8+ chars, 1 uppercase, 1 number & 1 special char.");
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
 
     try {
-      const response = await axios.post(`${API_URL}/api/teachers/signup`, {
+      // Signup using teacher signup endpoint
+      const response = await api.post("/api/teachers/signup", {
         firstName,
         lastName,
         email,
         phoneNumber,
         password,
       });
+      
       if (response.status === 200) {
-        alert("Account created successfully! Awaiting admin approval.");
-        navigate("/teacher/login");
+        setSuccess("Account created successfully! Please login.");
+        setTimeout(() => {
+          navigate("/teacher/login");
+        }, 2000);
       }
     } catch (error) {
       console.error("Signup error:", error.response?.data || error.message);
-      alert(`Signup failed. Try again. Error: ${error.response?.data?.message || error.message}`);
+      setError(error.response?.data?.message || "Signup failed. Try again.");
+    }
+  };
+
+  // Resend OTP
+  const handleResendOtp = async () => {
+    setError("");
+    setSuccess("");
+    setLoading(true);
+    
+    try {
+      const response = await api.post("/api/auth/forgot-password/send-otp", { 
+        email, 
+        userType: "teacher" 
+      });
+      
+      if (response.data.message) {
+        setSuccess("New OTP sent successfully!");
+      } else {
+        setError("Failed to resend OTP.");
+      }
+    } catch (error) {
+      setError("Failed to resend OTP. Try again.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -107,6 +185,9 @@ const TeacherRegister = () => {
         {/* Right Form */}
         <div className="student-form">
           <h2>Teacher Registration</h2>
+          
+          {error && <div className="error-message">{error}</div>}
+          {success && <div className="success-message">{success}</div>}
 
           <form onSubmit={isOtpSent ? handleVerifyOtp : handleSendOtp}>
             {!isOtpSent ? (
@@ -118,6 +199,7 @@ const TeacherRegister = () => {
                     value={firstName}
                     onChange={(e) => setFirstName(e.target.value)}
                     required
+                    disabled={loading}
                   />
                   <input
                     type="text"
@@ -125,6 +207,7 @@ const TeacherRegister = () => {
                     value={lastName}
                     onChange={(e) => setLastName(e.target.value)}
                     required
+                    disabled={loading}
                   />
                 </div>
 
@@ -134,6 +217,7 @@ const TeacherRegister = () => {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
+                  disabled={loading}
                 />
                 <input
                   type="text"
@@ -141,6 +225,7 @@ const TeacherRegister = () => {
                   value={phoneNumber}
                   onChange={(e) => setPhoneNumber(e.target.value)}
                   required
+                  disabled={loading}
                 />
 
                 {/* Password field with eye icon */}
@@ -151,6 +236,7 @@ const TeacherRegister = () => {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
+                    disabled={loading}
                   />
                   <span
                     className="password-toggle"
@@ -168,6 +254,7 @@ const TeacherRegister = () => {
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     required
+                    disabled={loading}
                   />
                   <span
                     className="password-toggle"
@@ -177,18 +264,54 @@ const TeacherRegister = () => {
                   </span>
                 </div>
 
-                <button type="submit" className="btn">Send OTP</button>
+                <button type="submit" className="btn" disabled={loading}>
+                  {loading ? "Sending OTP..." : "Send OTP"}
+                </button>
               </>
             ) : (
               <>
+                <div className="otp-info">
+                  <p>We've sent a verification code to:</p>
+                  <p className="email-display">{email}</p>
+                </div>
+                
                 <input
                   type="text"
-                  placeholder="Enter OTP"
+                  placeholder="Enter 6-digit OTP"
                   value={otp}
                   onChange={(e) => setOtp(e.target.value)}
+                  maxLength="6"
                   required
+                  disabled={loading}
                 />
-                <button type="submit" className="btn">Verify OTP</button>
+                
+                <button type="submit" className="btn" disabled={loading}>
+                  {loading ? "Verifying..." : "Verify OTP"}
+                </button>
+                
+                <div className="otp-actions">
+                  <button 
+                    type="button"
+                    onClick={handleResendOtp}
+                    className="btn secondary"
+                    disabled={loading}
+                  >
+                    Resend OTP
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      setIsOtpSent(false);
+                      setOtp("");
+                      setError("");
+                      setSuccess("");
+                    }}
+                    className="btn secondary"
+                    disabled={loading}
+                  >
+                    Back
+                  </button>
+                </div>
               </>
             )}
           </form>
