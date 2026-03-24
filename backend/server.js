@@ -25,7 +25,7 @@ const getFrontendUrl = () => {
 const allowedOrigins = [
   getFrontendUrl(),
   "https://live-learn-gray.vercel.app",
-  "https://live-learn.onrender.com",
+  "https://live-learn1.onrender.com",
   "http://localhost:3000",
   "http://localhost:3001",
   "http://localhost:5000"
