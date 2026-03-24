@@ -15,7 +15,7 @@ const sendEmail = async (to, subject, htmlContent) => {
 
     sendSmtpEmail.sender = {
       name: "Live Learning",
-      email: "bindugugulothu32@gmail.com"
+      email: "virtualclassroom32@gmail.com"
     };
 
     sendSmtpEmail.to = [

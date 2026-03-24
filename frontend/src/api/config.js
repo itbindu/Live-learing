@@ -12,7 +12,7 @@ const getApiUrl = () => {
   
   // Production on Vercel
   if (hostname.includes('vercel.app')) {
-    return 'https://live-learn.onrender.com';
+    return 'https://live-learn-1.onrender.com';
   }
   
   // Local development
