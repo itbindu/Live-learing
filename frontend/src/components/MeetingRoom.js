@@ -17,7 +17,6 @@ const MeetingRoom = ({ role = 'student' }) => {
   const navigate = useNavigate();
   
   // ============ ENVIRONMENT VARIABLE ============
-  // Use the configured API URL for WebSocket connection
   const BACKEND_URL = API_URL;
   
   // ============ STATES ============
@@ -51,8 +50,6 @@ const MeetingRoom = ({ role = 'student' }) => {
   const [screenShareParticipant, setScreenShareParticipant] = useState(null);
   const [hasScreenShare, setHasScreenShare] = useState(false);
   const [layout, setLayout] = useState('grid');
-  
-  // Breakout room state
   const [showBreakout, setShowBreakout] = useState(false);
   
   // Refs
@@ -64,6 +61,7 @@ const MeetingRoom = ({ role = 'student' }) => {
   const peerConnections = useRef({});
   const screenPeerConnections = useRef({});
   const videoGridRef = useRef(null);
+  const hasRecordedJoin = useRef(false); // Prevent duplicate join on refresh
 
   // STUN Servers
   const configuration = {
@@ -87,7 +85,7 @@ const MeetingRoom = ({ role = 'student' }) => {
     iceCandidatePoolSize: 10
   };
 
-  // ============ SAVE ATTENDANCE TO LOCALSTORAGE ============
+  // ============ ATTENDANCE FUNCTIONS ============
   const saveAttendanceToLocalStorage = (type, record) => {
     try {
       const storageKey = `attendance_${meetingId}`;
@@ -96,62 +94,63 @@ const MeetingRoom = ({ role = 'student' }) => {
       
       if (existing) {
         records = JSON.parse(existing);
+        if (!Array.isArray(records)) {
+          records = [];
+        }
       }
       
       if (type === 'join') {
-        // ✅ FIXED: Check if already have this user active (no duplicate joins)
+        // Check if already have this user active (no duplicate joins)
         const existingIndex = records.findIndex(r => 
-          r.userId === record.userId && !r.leftAt
+          r.userId === record.userId && !r.leftAt && r.isActive !== false
         );
         
-        // 🚫 If already active → skip duplicate join
-        if (existingIndex !== -1 && !records[existingIndex].leftAt) {
+        // Skip duplicate join
+        if (existingIndex !== -1) {
           console.log("⚠️ Already active, skip duplicate join for:", record.userName);
           return;
         }
         
-        // ✅ New session
+        // New session
         records.push({
           ...record,
           meetingId,
           joinedAt: record.joinedAt || new Date().toISOString(),
-          isActive: true
+          isActive: true,
+          leftAt: null,
+          duration: null
         });
         
-        console.log('📝 Attendance join recorded for:', record.userName);
-      } else if (type === 'leave') {
+        console.log('✅ Attendance join recorded for:', record.userName);
+      } 
+      else if (type === 'leave') {
         const existingIndex = records.findIndex(r => 
-          r.userId === record.userId && !r.leftAt
+          r.userId === record.userId && !r.leftAt && r.isActive === true
         );
         
         if (existingIndex !== -1) {
+          const leftAt = record.leftAt || new Date().toISOString();
+          const joinedAt = records[existingIndex].joinedAt;
+          const duration = Math.round((new Date(leftAt) - new Date(joinedAt)) / 1000);
+          
           records[existingIndex] = {
             ...records[existingIndex],
-            leftAt: record.leftAt || new Date().toISOString(),
-            duration: record.duration || calculateDuration(
-              records[existingIndex].joinedAt, 
-              record.leftAt || new Date().toISOString()
-            ),
+            leftAt: leftAt,
+            duration: duration,
             isActive: false
           };
-          console.log('📝 Attendance leave recorded for:', record.userName);
+          console.log('✅ Attendance leave recorded for:', record.userName, 'Duration:', duration, 'seconds');
         }
       }
       
       localStorage.setItem(storageKey, JSON.stringify(records));
       
-      // Also try to save to server via API
+      // Also try to save to server
       saveAttendanceToServer(meetingId, type, record);
       
     } catch (error) {
       console.error('Error saving attendance to localStorage:', error);
     }
-  };
-
-  const calculateDuration = (joinedAt, leftAt) => {
-    const join = new Date(joinedAt).getTime();
-    const leave = new Date(leftAt).getTime();
-    return Math.round((leave - join) / 1000);
   };
 
   const saveAttendanceToServer = async (meetingId, type, record) => {
@@ -681,46 +680,74 @@ const MeetingRoom = ({ role = 'student' }) => {
     navigate('/teacher/dashboard');
   };
 
-  // ============ HANDLE TAB/BROWSER CLOSE ============
+  // ============ ATTENDANCE TRACKING - JOIN ON MOUNT ============
   useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "hidden") {
-        // Record attendance when tab is hidden
-        if (userId && userName) {
-          saveAttendanceToLocalStorage('leave', {
-            userId,
-            userName,
-            role,
-            leftAt: new Date().toISOString()
-          });
-        }
+    // Only record join once per session
+    if (!hasRecordedJoin.current && userId && userName) {
+      const record = {
+        userId: userId,
+        userName: userName,
+        email: userEmail,
+        role: role,
+        joinedAt: new Date().toISOString()
+      };
+      
+      // Check if already have an active session
+      const storageKey = `attendance_${meetingId}`;
+      const existingRecords = JSON.parse(localStorage.getItem(storageKey) || '[]');
+      const alreadyActive = existingRecords.some(r => 
+        r.userId === userId && !r.leftAt && r.isActive !== false
+      );
+      
+      if (!alreadyActive) {
+        console.log("📝 Recording initial join for:", userName);
+        saveAttendanceToLocalStorage("join", record);
+        hasRecordedJoin.current = true;
       }
-    };
+    }
+  }, [userId, userName, userEmail, role, meetingId]);
 
-    const handleBeforeUnload = () => {
-      // Record attendance before page unload
+  // ============ ATTENDANCE TRACKING - LEAVE ON UNMOUNT/TAB CLOSE ============
+  useEffect(() => {
+    const handleLeave = () => {
       if (userId && userName) {
-        saveAttendanceToLocalStorage('leave', {
-          userId,
-          userName,
-          role,
+        console.log("📝 Recording leave for:", userName);
+        saveAttendanceToLocalStorage("leave", {
+          userId: userId,
+          userName: userName,
+          role: role,
           leftAt: new Date().toISOString()
         });
       }
     };
 
+    // Handle tab/window close
+    window.addEventListener("beforeunload", handleLeave);
+    
+    // Handle page hide (for mobile/tablet)
+    window.addEventListener("pagehide", handleLeave);
+    
+    // Handle visibility change (tab switch - optional, but good for accuracy)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        handleLeave();
+      }
+    };
     document.addEventListener("visibilitychange", handleVisibilityChange);
-    window.addEventListener("beforeunload", handleBeforeUnload);
 
     return () => {
+      // Record leave when component unmounts (user leaves meeting)
+      handleLeave();
+      // Cleanup listeners
+      window.removeEventListener("beforeunload", handleLeave);
+      window.removeEventListener("pagehide", handleLeave);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
-      window.removeEventListener("beforeunload", handleBeforeUnload);
     };
-  }, [userId, userName, role]);
+  }, [userId, userName, role, meetingId]);
 
   // ============ INITIALIZE ============
   useEffect(() => {
-    // ✅ FIXED: Generate persistent user ID (NO DUPLICATES ON REFRESH)
+    // Generate persistent user ID (NO DUPLICATES ON REFRESH)
     let storedId = localStorage.getItem("meetingUserId");
     
     if (!storedId) {
@@ -774,7 +801,6 @@ const MeetingRoom = ({ role = 'student' }) => {
       console.log('✅ Connected to server at:', BACKEND_URL);
       setConnectionStatus('connected');
       
-      // ✅ FIXED: Use storedId instead of newUserId
       socket.emit('join-meeting', {
         meetingId,
         userId: storedId,
@@ -784,15 +810,6 @@ const MeetingRoom = ({ role = 'student' }) => {
       });
       
       console.log('Joining meeting as:', userName, 'with role:', role, 'email:', userEmail, 'userId:', storedId);
-      
-      // ✅ FIXED: Use storedId for attendance
-      saveAttendanceToLocalStorage('join', {
-        userId: storedId,
-        userName: userName,
-        email: userEmail,
-        role: role,
-        joinedAt: new Date().toISOString()
-      });
     });
 
     socket.on('connect_error', (error) => {
@@ -855,7 +872,7 @@ const MeetingRoom = ({ role = 'student' }) => {
     // Attendance recording from server
     socket.on('attendance-recorded', (data) => {
       console.log('📊 Attendance recorded from server:', data);
-      saveAttendanceToLocalStorage(data.type, data.record);
+      // Don't double-record - server is just confirming
     });
 
     socket.on('receive-offer', handleReceiveOffer);
@@ -950,16 +967,6 @@ const MeetingRoom = ({ role = 'student' }) => {
 
     // Cleanup on unmount
     return () => {
-      // Record attendance on component unmount (user leaving)
-      if (storedId) {
-        saveAttendanceToLocalStorage('leave', {
-          userId: storedId,
-          userName: userName,
-          role: role,
-          leftAt: new Date().toISOString()
-        });
-      }
-      
       Object.values(peerConnections.current).forEach(pc => pc.close());
       Object.values(screenPeerConnections.current).forEach(pc => pc.close());
       
