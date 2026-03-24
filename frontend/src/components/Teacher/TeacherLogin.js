@@ -12,7 +12,7 @@ const TeacherLogin = () => {
   const navigate = useNavigate();
 
   // Get API URL from environment variable
- const API_URL = "https://live-learing.onrender.com";
+ const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000";
 
   const handleLogin = async (e) => {
     e.preventDefault();
