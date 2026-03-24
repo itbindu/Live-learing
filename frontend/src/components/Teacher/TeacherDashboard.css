@@ -1,0 +1,191 @@
+/* PAGE */
+.teacher-dashboard {
+  min-height: 100vh;
+  background: #ffffff;
+  padding: 2rem;
+}
+
+/* HEADER */
+.dashboard-header {
+  background: linear-gradient(90deg, #6c63ff, #7f75ff);
+  color: white;
+  padding: 1.6rem 2rem;
+  border-radius: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2.5rem;
+}
+
+.logout-button {
+  background: white;
+  color: #6c63ff;
+  border: none;
+  padding: 0.6rem 1.4rem;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(108, 99, 255, 0.25);
+}
+
+/* SECTION TITLE */
+.section-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1e293b;
+  letter-spacing: 0.3px;
+  margin-bottom: 1.5rem;
+}
+
+/* ACTION CARDS */
+.quick-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 3rem;
+}
+
+.action-card {
+  background: white;
+  border-radius: 16px;
+  padding: 1.8rem;
+  text-align: center;
+  text-decoration: none;
+  color: #1e293b;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  font-weight: 600;
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+  border-left: 6px solid #6c63ff;
+}
+
+.action-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 18px 40px rgba(108, 99, 255, 0.25);
+}
+
+.action-card:active {
+  transform: translateY(-2px) scale(0.98);
+}
+
+/* Light sweep effect */
+.action-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    120deg,
+    transparent 30%,
+    rgba(108, 99, 255, 0.08),
+    transparent 70%
+  );
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+.action-card:hover::after {
+  opacity: 1;
+}
+
+/* ICON */
+.card-icon {
+  background: rgba(108, 99, 255, 0.12);
+  padding: 14px;
+  border-radius: 14px;
+  color: #6c63ff;
+  margin-bottom: 10px;
+}
+
+/* CENTER BUTTON */
+.center-btn {
+  text-align: center;
+  margin-bottom: 2.5rem;
+}
+
+.toggle-students-btn {
+  background: #6c63ff;
+  color: white;
+  border: none;
+  padding: 0.9rem 2.2rem;
+  border-radius: 999px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 10px 25px rgba(108, 99, 255, 0.3);
+}
+
+/* STUDENT MANAGEMENT */
+.sm-container {
+  background: white;
+  padding: 28px;
+  border-radius: 18px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.08);
+}
+
+.sm-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: #4f46e5;
+  margin-bottom: 20px;
+}
+
+.sm-message {
+  background: #eef2ff;
+  padding: 12px;
+  border-radius: 10px;
+  margin-bottom: 16px;
+}
+
+/* TABLE */
+.sm-head,
+.sm-row {
+  display: grid;
+  grid-template-columns: 2fr 3fr 1fr;
+  align-items: center;
+  padding: 14px 16px;
+}
+
+.sm-head {
+  background: #f1f5f9;
+  border-radius: 12px;
+  font-weight: 600;
+}
+
+.sm-row {
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.sm-name {
+  font-weight: 600;
+}
+
+.sm-email {
+  color: #64748b;
+  font-size: 14px;
+}
+
+.sm-action {
+  display: flex;
+  justify-content: center;
+}
+
+.sm-assign {
+  background: #22c55e;
+  color: white;
+  border: none;
+  padding: 8px 18px;
+  border-radius: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(34, 197, 94, 0.35);
+}
+
+.sm-empty {
+  color: #64748b;
+  margin-top: 12px;
+}

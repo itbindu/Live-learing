@@ -1,0 +1,214 @@
+/* src/components/AttendanceTracker.css */
+
+.attendance-tracker {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background: #252836;
+  border: 1px solid #2d3748;
+  border-radius: 12px;
+  padding: 16px;
+  max-width: 400px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  z-index: 100;
+  display: none; /* Hidden by default, show on teacher dashboard */
+}
+
+.attendance-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.summary-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 12px;
+  background: #1a1d28;
+  border-radius: 8px;
+  border: 1px solid #2d3748;
+}
+
+.summary-item svg {
+  color: #3b82f6;
+  margin-bottom: 8px;
+}
+
+.summary-label {
+  font-size: 11px;
+  color: #a0aec0;
+  margin-bottom: 4px;
+}
+
+.summary-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: #e2e8f0;
+}
+
+.attendance-controls {
+  margin-bottom: 16px;
+}
+
+.export-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 12px;
+  background: #10b981;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.export-btn:hover {
+  background: #0da271;
+}
+
+.attendance-details {
+  display: none; /* Show only in teacher dashboard */
+}
+
+.attendance-details h4 {
+  margin: 0 0 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #e2e8f0;
+}
+
+.attendance-table {
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid #2d3748;
+  border-radius: 8px;
+}
+
+.table-header {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  background: #2d3748;
+  padding: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #a0aec0;
+  border-bottom: 1px solid #2d3748;
+}
+
+.table-row {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  padding: 12px;
+  background: #1a1d28;
+  border-bottom: 1px solid #2d3748;
+  font-size: 12px;
+}
+
+.table-row:last-child {
+  border-bottom: none;
+}
+
+.table-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #e2e8f0;
+  padding: 4px;
+}
+
+.user-name {
+  font-weight: 500;
+}
+
+.you-tag {
+  font-size: 10px;
+  color: #3b82f6;
+  margin-left: 4px;
+}
+
+.role-tag {
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.role-tag.teacher {
+  background: #f59e0b;
+  color: white;
+}
+
+.role-tag.student {
+  background: #3b82f6;
+  color: white;
+}
+
+.present {
+  color: #10b981;
+  font-weight: 600;
+}
+
+.status {
+  padding: 4px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.status.present {
+  background: rgba(16, 185, 129, 0.2);
+  color: #10b981;
+}
+
+.status.left {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+
+/* Dashboard Attendance View */
+.dashboard-attendance {
+  width: 100%;
+}
+
+.dashboard-attendance .attendance-summary {
+  display: flex;
+  justify-content: space-around;
+  margin-bottom: 24px;
+}
+
+.dashboard-attendance .attendance-details {
+  display: block;
+}
+
+.dashboard-attendance .attendance-table {
+  max-height: 400px;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .attendance-tracker {
+    max-width: 300px;
+    bottom: 10px;
+    right: 10px;
+  }
+  
+  .table-header,
+  .table-row {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  
+  .table-header .table-cell:nth-child(4),
+  .table-header .table-cell:nth-child(5),
+  .table-row .table-cell:nth-child(4),
+  .table-row .table-cell:nth-child(5) {
+    display: none;
+  }
+}

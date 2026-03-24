@@ -1,0 +1,122 @@
+/* PAGE */
+.student-leaderboard-container {
+  max-width: 1200px;
+  margin: 48px auto;
+  padding: 0 24px;
+  font-family: Inter, system-ui, sans-serif;
+}
+
+/* HEADER */
+.leaderboard-header {
+  text-align: center;
+  margin-bottom: 48px;
+}
+
+.leaderboard-header h2 {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #1e293b;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding-left: 14px;
+  border-left: 5px solid #6366f1;
+}
+
+.leaderboard-header p {
+  margin-top: 10px;
+  color: #64748b;
+  font-size: 1rem;
+}
+
+/* EMPTY STATE BOX */
+.no-results {
+  text-align: center;
+  padding: 64px 32px;
+  background: #f9fafb;
+  border-radius: 20px;
+  border: 1.5px dashed #c7d2fe;
+  margin-bottom: 32px;
+}
+
+.empty-icon {
+  font-size: 3.8rem;
+  margin-bottom: 20px;
+}
+
+.no-results h3 {
+  color: #1e293b;
+  font-size: 1.6rem;
+  margin-bottom: 6px;
+}
+
+.no-results p {
+  color: #64748b;
+  margin-bottom: 28px;
+}
+
+/* PRIMARY BUTTON */
+.take-quiz-btn {
+  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  color: white;
+  padding: 14px 36px;
+  border-radius: 14px;
+  text-decoration: none;
+  font-weight: 600;
+  display: inline-block;
+  transition: all 0.25s ease;
+}
+
+.take-quiz-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 28px rgba(99, 102, 241, 0.35);
+}
+
+/* BACK ARROW (TOP, SIMPLE) */
+.back-arrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #4f46e5;
+  font-weight: 600;
+  cursor: pointer;
+  margin: 0 auto 20px;
+  width: fit-content;
+  transition: transform 0.2s ease;
+}
+
+.back-arrow:hover {
+  transform: translateX(-4px);
+}
+
+/* ACTION BUTTONS */
+.action-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  margin-top: 32px;
+}
+
+/* SECONDARY BUTTON */
+.view-quizzes-btn {
+  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  color: white;
+  padding: 14px 36px;
+  border-radius: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.25s ease;
+}
+
+.view-quizzes-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 28px rgba(99, 102, 241, 0.35);
+}
+
+/* RESPONSIVE */
+@media (max-width: 768px) {
+  .action-buttons {
+    flex-direction: column;
+    align-items: center;
+  }
+}

@@ -1,0 +1,155 @@
+.meeting-history-container {
+  max-width: 900px;
+  margin: 2.5rem auto;
+  padding: 1.5rem;
+}
+
+/* Title */
+.meeting-history-container h2 {
+  text-align: center;
+  font-size: 22px;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 2rem;
+}
+
+/* Meetings list */
+.meetings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+}
+
+/* Meeting card */
+.meeting-item {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  padding: 1.4rem;
+
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+
+  box-shadow: 0 10px 24px rgba(108, 99, 255, 0.12);
+}
+
+/* Left info */
+.meeting-info h3 {
+  margin: 0 0 0.4rem 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.meeting-info p,
+.meeting-info small {
+  margin: 0.25rem 0;
+  color: #64748b;
+  font-size: 14px;
+}
+
+/* Meeting ID pill */
+.meeting-id {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #6c63ff;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* Actions */
+.meeting-actions {
+  display: flex;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+}
+
+/* Buttons base */
+.action-btn {
+  padding: 10px 18px;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Join button */
+.join-btn {
+  background: #6c63ff;
+  color: #ffffff;
+  box-shadow: 0 6px 16px rgba(108, 99, 255, 0.25);
+}
+
+.join-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 24px rgba(108, 99, 255, 0.35);
+}
+
+/* Copy button (same theme) */
+.copy-btn {
+  background: #6c63ff;
+  color: #ffffff;
+  box-shadow: 0 6px 16px rgba(108, 99, 255, 0.25);
+}
+
+.copy-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 24px rgba(108, 99, 255, 0.35);
+}
+
+/* Back section */
+.back-section {
+  margin-top: 2.5rem;
+  text-align: center;
+}
+
+.back-btn {
+  background: #6c63ff;
+  color: white;
+  border: none;
+  padding: 12px 28px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-weight: 600;
+
+  box-shadow: 0 6px 16px rgba(108, 99, 255, 0.25);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.back-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 24px rgba(108, 99, 255, 0.35);
+}
+
+/* States */
+.error {
+  color: #dc2626;
+  text-align: center;
+}
+
+.info {
+  color: #16a34a;
+  text-align: center;
+}
+
+.no-meetings {
+  text-align: center;
+  color: #64748b;
+  font-style: italic;
+}
+
+/* Loading */
+.meeting-history-loading {
+  text-align: center;
+  padding: 4rem;
+  font-size: 16px;
+  color: #6c63ff;
+}

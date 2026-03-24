@@ -1,0 +1,321 @@
+/* ================= ROOT ================= */
+:root {
+  --primary: #2563eb;
+  --primary-soft: #eef2ff;
+  --gray-bg: #f8fafc;
+  --gray-border: #e5e7eb;
+  --text-dark: #0f172a;
+  --text-medium: #1f2937;
+  --text-muted: #475569;
+  --danger: #ef4444;
+  --radius: 10px;
+  --shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+/* ================= PAGE ================= */
+.create-quiz-container {
+  max-width: 900px;
+  margin: 20px auto;
+  padding: 24px 28px;
+  background: #ffffff;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+/* ================= HEADINGS ================= */
+.create-quiz-container h2 {
+  text-align: center;
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: var(--text-dark);
+  margin-bottom: 20px;
+}
+
+.create-quiz-container h3 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-dark);
+  margin: 25px 0 15px;
+}
+
+/* ================= SECTION ================= */
+.section-card {
+  background: var(--gray-bg);
+  border: 1px solid var(--gray-border);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  margin-bottom: 20px;
+}
+
+/* ================= FORM ROW ================= */
+.form-row {
+  display: flex;
+  gap: 15px;
+  align-items: flex-end;
+}
+
+/* ================= FORM GROUP ================= */
+.form-group {
+  margin-bottom: 0;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-medium);
+}
+
+/* ================= INPUTS ================= */
+input,
+select {
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--gray-border);
+  background: #ffffff;
+  font-size: 0.9rem;
+  color: #111827;
+}
+
+input::placeholder {
+  color: #9ca3af;
+  font-size: 0.85rem;
+}
+
+input:focus,
+select:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+}
+
+/* ================= QUESTIONS ================= */
+.question-card {
+  background: #ffffff;
+  border: 1px solid var(--gray-border);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  margin-bottom: 16px;
+}
+
+.question-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.question-header h4 {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-dark);
+  margin: 0;
+}
+
+.remove-text-btn {
+  background: none;
+  border: none;
+  color: var(--danger);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 2px 6px;
+}
+
+/* ================= OPTIONS ================= */
+.options-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.option-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.option-label {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--primary-soft);
+  color: #1d4ed8;
+  font-weight: 600;
+  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.option-input {
+  flex: 1;
+}
+
+/* ================= CORRECT ANSWER ROW ================= */
+.correct-answer-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--gray-border);
+}
+
+.correct-answer-row label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-medium);
+  min-width: 80px;
+}
+
+.correct-select {
+  width: 120px;
+}
+
+.blank-input {
+  flex: 1;
+  max-width: 300px;
+}
+
+/* ================= BUTTONS ================= */
+.button-group {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.add-btn {
+  background: #ffffff;
+  border: 1px dashed var(--primary);
+  color: var(--primary);
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.submit-btn {
+  flex: 1;
+  background: var(--primary);
+  color: #ffffff;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.submit-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ================= MESSAGES ================= */
+.success-message,
+.error-message {
+  padding: 10px 14px;
+  border-radius: 6px;
+  margin-bottom: 16px;
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+
+.success-message {
+  background: #ecfdf5;
+  border: 1px solid #6ee7b7;
+  color: #065f46;
+}
+
+.error-message {
+  background: #fee2e2;
+  border: 1px solid #fca5a5;
+  color: #7f1d1d;
+}
+
+/* ================= RESPONSIVE ================= */
+@media (max-width: 720px) {
+  .create-quiz-container {
+    margin: 10px;
+    padding: 16px;
+  }
+
+  .form-row {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .options-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .button-group {
+    flex-direction: column;
+  }
+
+  .correct-answer-row {
+    flex-wrap: wrap;
+  }
+  
+  .blank-input {
+    max-width: 100%;
+  }
+}
+.form-row {
+  display: flex;
+  gap: 15px;
+  align-items: flex-end;
+  margin-bottom: 12px;
+}
+
+.type-field {
+  flex: 1;
+  min-width: 140px;
+}
+
+.question-field {
+  flex: 3;
+}
+
+/* Make sure selects and inputs have consistent height */
+.type-field select,
+.question-field input {
+  height: 38px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--gray-border);
+  width: 100%;
+}
+.form-row {
+  display: flex;
+  gap: 15px;
+  margin-bottom: 15px;
+}
+
+.form-group {
+  flex: 1;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.form-group select,
+.form-group input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+  font-size: 0.95rem;
+}

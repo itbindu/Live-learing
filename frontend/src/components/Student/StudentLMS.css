@@ -1,0 +1,202 @@
+/* src/components/Student/StudentLMS.css */
+.student-lms-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 30px 20px;
+}
+
+.lms-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 40px;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
+.lms-header h1 {
+  margin: 0;
+  color: #1a3c5e;
+  font-size: 2rem;
+}
+
+.back-btn {
+  padding: 12px 24px;
+  background: #6c757d;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-weight: 600;
+}
+
+.back-btn:hover {
+  background: #5a6268;
+  transform: translateY(-2px);
+}
+
+.files-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  gap: 24px;
+}
+
+.file-card {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  transition: all 0.2s;
+  display: flex;
+  flex-direction: column;
+}
+
+.file-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 24px rgba(0,0,0,0.12);
+  border-color: #6c63ff;
+}
+
+.file-icon-large {
+  font-size: 3rem;
+  text-align: center;
+  margin-bottom: 10px;
+}
+
+.file-info {
+  flex: 1;
+  margin-bottom: 20px;
+}
+
+.file-name {
+  margin: 0 0 12px;
+  font-size: 1.1rem;
+  color: #1e88e5;
+  word-break: break-word;
+  line-height: 1.4;
+  font-weight: 600;
+}
+
+.file-description {
+  margin: 0 0 15px;
+  color: #374151;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  padding: 10px;
+  background: #f9fafb;
+  border-radius: 8px;
+  border-left: 3px solid #6c63ff;
+}
+
+.file-meta {
+  background: #f3f4f6;
+  padding: 12px;
+  border-radius: 8px;
+  margin-top: 10px;
+}
+
+.file-teacher,
+.file-date,
+.file-size {
+  margin: 6px 0;
+  color: #4b5563;
+  font-size: 0.9rem;
+}
+
+.label {
+  color: #1f2937;
+  font-weight: 600;
+  margin-right: 6px;
+}
+
+.file-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.download-btn {
+  flex: 1;
+  padding: 12px 16px;
+  background: #28a745;
+  color: white;
+  text-decoration: none;
+  border-radius: 8px;
+  font-weight: 600;
+  transition: all 0.2s;
+  text-align: center;
+  border: none;
+  cursor: pointer;
+  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.download-btn.view-btn {
+  background: #6c63ff;
+}
+
+.download-btn.view-btn:hover {
+  background: #5a52d5;
+}
+
+.download-btn:hover {
+  background: #218838;
+  transform: translateY(-2px);
+}
+
+.loading, .no-files {
+  text-align: center;
+  padding: 60px 20px;
+  color: #6b7280;
+  font-size: 1.1rem;
+  background: #f9fafb;
+  border-radius: 12px;
+  margin-top: 30px;
+}
+
+.error-message {
+  color: #dc3545;
+  text-align: center;
+  margin: 20px 0;
+  padding: 15px;
+  background: #fee2e2;
+  border-radius: 8px;
+  font-weight: 500;
+  border: 1px solid #fecaca;
+}
+
+.no-files p {
+  margin-bottom: 10px;
+  font-size: 1.2rem;
+  color: #374151;
+}
+
+.no-files small {
+  color: #6b7280;
+  font-size: 0.95rem;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .files-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .lms-header {
+    flex-direction: column;
+    text-align: center;
+  }
+  
+  .file-actions {
+    flex-direction: column;
+  }
+  
+  .download-btn {
+    width: 100%;
+  }
+}
