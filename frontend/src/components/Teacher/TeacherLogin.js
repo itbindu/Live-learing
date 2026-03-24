@@ -20,7 +20,7 @@ const TeacherLogin = () => {
     if (!password) return alert("Enter your password.");
 
     try {
-      const response = await axios.post(`${API_URL}/api/teacher/login`, {
+      const response = await axios.post(`${API_URL}/api/auth/teacher/login`, {
         emailOrPhone,
         password,
       });
