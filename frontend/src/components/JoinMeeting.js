@@ -15,6 +15,10 @@ const JoinMeeting = () => {
 
   const navigate = useNavigate();
 
+  // ✅ ADD THIS
+  const API_URL =
+    process.env.REACT_APP_API_URL || "http://localhost:5000";
+
   useEffect(() => {
     fetchMeeting();
   }, [meetingId]);
@@ -22,7 +26,7 @@ const JoinMeeting = () => {
   const fetchMeeting = async () => {
     try {
       const response = await axios.get(
-        `http://localhost:5000/api/students/meeting/${meetingId}`
+        `${API_URL}/api/students/meeting/${meetingId}` // ✅ FIXED
       );
 
       setMeeting(response.data.meeting);
@@ -40,7 +44,7 @@ const JoinMeeting = () => {
 
     try {
       const response = await axios.post(
-        `http://localhost:5000/api/students/join-meeting/${meetingId}`,
+        `${API_URL}/api/students/join-meeting/${meetingId}`, // ✅ FIXED
         { name, email }
       );
 
@@ -48,10 +52,8 @@ const JoinMeeting = () => {
       setParticipants(response.data.participants);
       setJoined(true);
 
-      // store student name
       localStorage.setItem("currentStudentName", name);
 
-      // navigate to meeting room
       navigate(`/student/meeting-room/${meetingId}`);
     } catch (error) {
       setMessage(
@@ -69,7 +71,6 @@ const JoinMeeting = () => {
   return (
     <div className="join-page">
 
-      {/* Back Arrow */}
       <div
         className="back-arrow"
         onClick={() => navigate("/student/dashboard")}
