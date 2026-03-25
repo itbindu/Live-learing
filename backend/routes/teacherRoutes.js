@@ -258,14 +258,18 @@ router.post('/approve-student', authenticateToken, async (req, res) => {
     const frontendUrl = getFrontendUrl();
     
     const htmlContent = `
-      <h2>Dear ${student.firstName} ${student.lastName},</h2>
-      <p>You have been assigned to teacher <strong>${teacher.firstName} ${teacher.lastName}</strong>.</p>
-      <p>Login: <a href="${frontendUrl}/student/login">Student Dashboard</a></p>
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h2 style="color: #6c63ff;">🎓 Welcome to Virtual Classroom!</h2>
+        <h3>Dear ${student.firstName} ${student.lastName},</h3>
+        <p>You have been assigned to teacher <strong>${teacher.firstName} ${teacher.lastName}</strong>.</p>
+        <p>You can now access your dashboard and join meetings.</p>
+        <a href="${frontendUrl}/student/login" style="display: inline-block; background: #6c63ff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; margin: 20px 0;">Login to Dashboard</a>
+      </div>
     `;
     
     await sendEmail(
       student.email,
-      `You've been assigned to teacher ${teacher.firstName} ${teacher.lastName}!`,
+      `✨ You've been assigned to teacher ${teacher.firstName} ${teacher.lastName}!`,
       htmlContent
     );
 
@@ -306,9 +310,13 @@ router.post('/assign-student', authenticateToken, async (req, res) => {
     const frontendUrl = getFrontendUrl();
     
     const htmlContent = `
-      <h2>Dear ${student.firstName} ${student.lastName},</h2>
-      <p>You have been assigned to teacher <strong>${teacher.firstName} ${teacher.lastName}</strong>.</p>
-      <p>Login: <a href="${frontendUrl}/student/login">Student Dashboard</a></p>
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h2 style="color: #6c63ff;">🎓 New Teacher Assignment</h2>
+        <h3>Dear ${student.firstName} ${student.lastName},</h3>
+        <p>You have been assigned to teacher <strong>${teacher.firstName} ${teacher.lastName}</strong>.</p>
+        <p>You can now access your dashboard and join meetings.</p>
+        <a href="${frontendUrl}/student/login" style="display: inline-block; background: #6c63ff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; margin: 20px 0;">Login to Dashboard</a>
+      </div>
     `;
     
     await sendEmail(
@@ -348,7 +356,7 @@ router.post('/remove-assignment', authenticateToken, async (req, res) => {
   }
 });
 
-// ============ MEETING ROUTES ============
+// ============ MEETING ROUTES (FIXED WITH EMAIL NOTIFICATIONS) ============
 router.post('/create-meeting', authenticateToken, async (req, res) => {
   const { title, description, scheduledTime } = req.body;
   if (!title) return res.status(400).json({ message: 'Meeting title is required' });
@@ -367,48 +375,111 @@ router.post('/create-meeting', authenticateToken, async (req, res) => {
 
     await newMeeting.save();
 
+    // Get all students assigned to this teacher
     const assignedStudents = await Student.find({ teachers: req.user.id });
     const frontendUrl = getFrontendUrl();
     const meetingLink = `${frontendUrl}/meeting/${meetingId}`;
     const teacher = await Teacher.findById(req.user.id);
 
     let notifiedCount = 0;
+    let failedCount = 0;
+
+    console.log(`📧 Sending meeting notifications to ${assignedStudents.length} students...`);
+
     if (assignedStudents.length > 0) {
       for (const student of assignedStudents) {
         try {
           const htmlContent = `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <h2 style="color: #1a73e8;">New Virtual Classroom Meeting</h2>
-              <p><strong>Dear ${student.firstName} ${student.lastName},</strong></p>
-              <p>Your teacher <strong>${teacher.firstName} ${teacher.lastName}</strong> has created a new meeting:</p>
-              <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                <h3 style="margin-top: 0; color: #333;">${title}</h3>
-                ${description ? `<p><strong>Description:</strong> ${description}</p>` : ''}
-                <p><strong>Meeting ID:</strong> ${meetingId}</p>
-                <p><strong>Scheduled:</strong> ${new Date(scheduledTime).toLocaleString()}</p>
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            </head>
+            <body style="margin: 0; padding: 0; font-family: 'Segoe UI', Arial, sans-serif; background-color: #f4f7fb;">
+              <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+                
+                <!-- Header -->
+                <div style="background: linear-gradient(135deg, #6c63ff 0%, #4a3bff 100%); padding: 30px 20px; text-align: center;">
+                  <h1 style="color: white; margin: 0; font-size: 28px;">🎓 Virtual Classroom</h1>
+                  <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0;">New Meeting Invitation</p>
+                </div>
+                
+                <!-- Content -->
+                <div style="padding: 30px 25px;">
+                  <h2 style="color: #2d3748; margin-top: 0;">Hello ${student.firstName} ${student.lastName}! 👋</h2>
+                  <p style="color: #4a5568; font-size: 16px; line-height: 1.5;">
+                    Your teacher <strong>${teacher.firstName} ${teacher.lastName}</strong> has scheduled a new meeting.
+                  </p>
+                  
+                  <!-- Meeting Details Card -->
+                  <div style="background: #f7fafc; border-left: 4px solid #6c63ff; padding: 20px; margin: 25px 0; border-radius: 8px;">
+                    <h3 style="color: #2d3748; margin: 0 0 15px;">📋 Meeting Details</h3>
+                    <p style="margin: 8px 0;"><strong style="color: #4a5568;">📚 Title:</strong> ${title}</p>
+                    ${description ? `<p style="margin: 8px 0;"><strong style="color: #4a5568;">📝 Description:</strong> ${description}</p>` : ''}
+                    <p style="margin: 8px 0;"><strong style="color: #4a5568;">🆔 Meeting ID:</strong> <code style="background: #e2e8f0; padding: 4px 8px; border-radius: 4px;">${meetingId}</code></p>
+                    <p style="margin: 8px 0;"><strong style="color: #4a5568;">📅 Date:</strong> ${new Date(scheduledTime).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                    <p style="margin: 8px 0;"><strong style="color: #4a5568;">⏰ Time:</strong> ${new Date(scheduledTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</p>
+                  </div>
+                  
+                  <!-- Join Button -->
+                  <div style="text-align: center; margin: 30px 0;">
+                    <a href="${meetingLink}" 
+                       style="display: inline-block; background: #6c63ff; color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">
+                      🚀 Join Meeting Now
+                    </a>
+                  </div>
+                  
+                  <!-- Additional Info -->
+                  <div style="background: #fff5e6; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                    <p style="margin: 0; color: #c05621; font-size: 14px;">
+                      💡 <strong>Quick Tip:</strong> Make sure your microphone and camera are ready before joining.
+                    </p>
+                  </div>
+                  
+                  <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 25px 0;" />
+                  
+                  <p style="color: #718096; font-size: 12px; margin: 0; text-align: center;">
+                    This is an automated email from Virtual Classroom. If you have any questions, please contact your teacher.
+                  </p>
+                </div>
               </div>
-              <a href="${meetingLink}" style="display: inline-block; background: #1a73e8; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; margin: 10px 0;">➤ Join Meeting</a>
-            </div>
+            </body>
+            </html>
           `;
 
-          await sendEmail(
+          const emailResult = await sendEmail(
             student.email,
             `📅 New Meeting: ${title} from ${teacher.firstName} ${teacher.lastName}`,
             htmlContent
           );
           
-          notifiedCount++;
+          if (emailResult.success) {
+            notifiedCount++;
+            console.log(`✅ Email sent to ${student.email}`);
+          } else {
+            failedCount++;
+            console.error(`❌ Failed to send email to ${student.email}:`, emailResult.error);
+          }
         } catch (emailError) {
-          console.error(`Failed to send email to ${student.email}:`, emailError);
+          failedCount++;
+          console.error(`❌ Error sending email to ${student.email}:`, emailError);
         }
       }
     }
 
+    console.log(`📊 Email results: ${notifiedCount} sent, ${failedCount} failed, ${assignedStudents.length} total`);
+
     res.status(200).json({ 
       success: true, 
-      message: `✅ Meeting created! ${notifiedCount} assigned students notified.`,
+      message: `✅ Meeting created! ${notifiedCount} out of ${assignedStudents.length} assigned students notified via email.`,
       meetingId,
-      link: meetingLink 
+      link: meetingLink,
+      emailStats: {
+        sent: notifiedCount,
+        failed: failedCount,
+        total: assignedStudents.length
+      }
     });
   } catch (error) {
     console.error('Create meeting error:', error);
@@ -445,6 +516,7 @@ router.get('/meeting/:meetingId', async (req, res) => {
   }
 });
 
+
 router.post('/end-meeting/:meetingId', authenticateToken, async (req, res) => {
   try {
     const { meetingId } = req.params;
@@ -457,6 +529,7 @@ router.post('/end-meeting/:meetingId', authenticateToken, async (req, res) => {
     }
     
     meeting.isActive = false;
+    meeting.endedAt = new Date();
     await meeting.save();
     
     res.status(200).json({ success: true, message: 'Meeting ended successfully' });
@@ -667,5 +740,6 @@ router.get('/meeting-attendance/:meetingId', authenticateToken, async (req, res)
     res.status(500).json({ message: 'Failed to fetch attendance' });
   }
 });
+
 
 module.exports = router;

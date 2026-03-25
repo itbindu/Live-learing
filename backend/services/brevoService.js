@@ -14,7 +14,7 @@ const sendEmail = async (to, subject, htmlContent) => {
     sendSmtpEmail.htmlContent = htmlContent;
 
     sendSmtpEmail.sender = {
-      name: "Live Learning",
+      name: "Live Learn 1",
       email: "virtualclassroom32@gmail.com"
     };
 

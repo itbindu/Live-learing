@@ -120,7 +120,8 @@ router.get('/profile', authenticateToken, async (req, res) => {
   }
 });
 
-// Get meetings from all assigned teachers
+// ==================== GET MEETINGS (FIXED) ====================
+// Now shows BOTH active AND ended meetings for students
 router.get('/meetings', authenticateToken, async (req, res) => {
   try {
     const student = await Student.findById(req.user.id).populate('teachers');
@@ -132,13 +133,15 @@ router.get('/meetings', authenticateToken, async (req, res) => {
       return res.status(200).json({ meetings: [], message: 'No teachers assigned yet.' });
     }
 
+    // ✅ FIXED: Removed isActive: true filter to show ALL meetings
+    // Students can now see both active and completed meetings
     const meetings = await Meeting.find({ 
-      teacherId: { $in: student.teachers.map(t => t._id) }, 
-      isActive: true 
+      teacherId: { $in: student.teachers.map(t => t._id) }
+      // ❌ REMOVED: isActive: true
     })
       .populate('teacherId', 'firstName lastName')
       .sort({ createdAt: -1 })
-      .select('title meetingId createdAt teacherId');
+      .select('title meetingId createdAt teacherId isActive endedAt');
 
     res.status(200).json({ meetings });
   } catch (error) {
@@ -171,7 +174,12 @@ router.post('/join-meeting/:meetingId', async (req, res) => {
     }
 
     const meeting = await Meeting.findOne({ meetingId }).populate('teacherId');
-    if (!meeting || !meeting.isActive) return res.status(404).json({ message: 'Meeting not found or inactive' });
+    if (!meeting) return res.status(404).json({ message: 'Meeting not found' });
+    
+    // Check if meeting is active
+    if (!meeting.isActive) {
+      return res.status(403).json({ message: 'This meeting has already ended. Cannot join.' });
+    }
 
     const isAssigned = student.teachers.some(t => t._id.toString() === meeting.teacherId._id.toString());
     if (!isAssigned) {
@@ -201,7 +209,7 @@ router.get('/meeting/:meetingId', async (req, res) => {
   const { meetingId } = req.params;
   try {
     const meeting = await Meeting.findOne({ meetingId }).populate('teacherId', 'firstName lastName');
-    if (!meeting || !meeting.isActive) return res.status(404).json({ message: 'Meeting not found or inactive' });
+    if (!meeting) return res.status(404).json({ message: 'Meeting not found' });
     res.status(200).json({ success: true, meeting });
   } catch (error) {
     console.error('Get meeting error:', error);

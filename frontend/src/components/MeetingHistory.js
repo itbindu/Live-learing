@@ -78,6 +78,10 @@ const MeetingHistory = ({ role = 'student' }) => {
       : 'No meetings available yet. Check back later or contact your teacher.';
   const actionButtonText = role === 'teacher' ? 'Join as Teacher' : 'Join Meeting';
 
+  // Separate meetings into active and ended
+  const activeMeetings = meetings.filter(m => m.isActive === true);
+  const endedMeetings = meetings.filter(m => m.isActive === false);
+
   if (loading) {
     return <div className="meeting-history-loading">Loading meetings...</div>;
   }
@@ -91,36 +95,92 @@ const MeetingHistory = ({ role = 'student' }) => {
 
       {meetings.length > 0 ? (
         <div className="meetings-list">
-          {meetings.map((meeting) => (
-            <div key={meeting._id || meeting.meetingId} className="meeting-item">
-              <div className="meeting-info">
-                <h3>{meeting.title || 'Untitled Meeting'}</h3>
-                <p>
-                  {role === 'teacher' ? 'Created' : 'Available'}:{' '}
-                  {new Date(meeting.createdAt).toLocaleString()}
-                </p>
-                <small className="meeting-id">ID: {meeting.meetingId}</small>
-              </div>
+          
+          {/* Active Meetings Section */}
+          {activeMeetings.length > 0 && (
+            <>
+              <h3 className="section-title">Active Meetings 🟢</h3>
+              {activeMeetings.map((meeting) => (
+                <div key={meeting._id || meeting.meetingId} className="meeting-item active">
+                  <div className="meeting-info">
+                    <h3>{meeting.title || 'Untitled Meeting'}</h3>
+                    <p>
+                      {role === 'teacher' ? 'Created' : 'Available'}:{' '}
+                      {new Date(meeting.createdAt).toLocaleString()}
+                    </p>
+                    <small className="meeting-id">ID: {meeting.meetingId}</small>
+                    <p className="meeting-status active">
+                      Status: Active 🟢
+                    </p>
+                  </div>
 
-              <div className="meeting-actions">
-                <button
-                  className="action-btn join-btn"
-                  onClick={() => handleAction(meeting.meetingId)}
-                >
-                  {actionButtonText}
-                </button>
+                  <div className="meeting-actions">
+                    <button
+                      className="action-btn join-btn"
+                      onClick={() => handleAction(meeting.meetingId)}
+                    >
+                      {actionButtonText}
+                    </button>
 
-                {role === 'teacher' && (
-                  <button
-                    className="action-btn copy-btn"
-                    onClick={() => copyLink(meeting.meetingId)}
-                  >
-                    Copy Link
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
+                    {role === 'teacher' && (
+                      <button
+                        className="action-btn copy-btn"
+                        onClick={() => copyLink(meeting.meetingId)}
+                      >
+                        Copy Link
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
+
+          {/* Ended Meetings Section */}
+          {endedMeetings.length > 0 && (
+            <>
+              <h3 className="section-title ended">Completed Meetings 🔴</h3>
+              {endedMeetings.map((meeting) => (
+                <div key={meeting._id || meeting.meetingId} className="meeting-item ended">
+                  <div className="meeting-info">
+                    <h3>{meeting.title || 'Untitled Meeting'}</h3>
+                    <p>
+                      {role === 'teacher' ? 'Created' : 'Available'}:{' '}
+                      {new Date(meeting.createdAt).toLocaleString()}
+                    </p>
+                    <small className="meeting-id">ID: {meeting.meetingId}</small>
+                    {meeting.endedAt && (
+                      <p className="meeting-ended-time">
+                        Ended: {new Date(meeting.endedAt).toLocaleString()}
+                      </p>
+                    )}
+                    <p className="meeting-status ended">
+                      Status: Ended 🔴
+                    </p>
+                  </div>
+
+                  <div className="meeting-actions">
+                    <button
+                      className="action-btn join-btn disabled"
+                      disabled={true}
+                      style={{ opacity: 0.5, cursor: 'not-allowed' }}
+                    >
+                      Meeting Ended
+                    </button>
+
+                    {role === 'teacher' && (
+                      <button
+                        className="action-btn copy-btn"
+                        onClick={() => copyLink(meeting.meetingId)}
+                      >
+                        Copy Link
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
         </div>
       ) : (
         !error && <p className="no-meetings">{noMeetingsText}</p>
