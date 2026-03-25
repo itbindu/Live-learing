@@ -275,12 +275,17 @@ io.on('connection', (socket) => {
       users.delete(socket.id);
       
       socket.to(meetingId).emit('user-left', userId);
+      
+      // If user was screen sharing, stop it
+      if (user.isScreenSharing) {
+        io.to(meetingId).emit('screen-share-stopped', { userId });
+      }
     }
     
     socket.leave(meetingId);
   });
 
-  // ============ DISCONNECT ============
+  // ============ DISCONNECT - IMPROVED VERSION ============
   socket.on('disconnect', async () => {
     console.log('🔴 User disconnected:', socket.id);
     
@@ -288,10 +293,43 @@ io.on('connection', (socket) => {
     if (user) {
       const { meetingId, userId, userName, email, role, joinedAt, isScreenSharing } = user;
       
-      const leftAt = new Date();
+      console.log(`📝 Processing disconnect for: ${userName} in meeting ${meetingId}`);
       
-      await saveAttendanceLog(meetingId, user, 'leave');
+      // Record leave attendance for disconnected user
+      try {
+        // Check if user has an active attendance record in database
+        const meeting = await Meeting.findOne({ meetingId });
+        if (meeting) {
+          const activeRecord = meeting.attendance.find(
+            a => a.userId === userId && a.isActive === true
+          );
+          
+          if (activeRecord) {
+            const leftAt = new Date();
+            const joinTime = new Date(activeRecord.joinedAt).getTime();
+            const leaveTime = leftAt.getTime();
+            const duration = Math.round((leaveTime - joinTime) / 1000);
+            
+            // Update the record
+            activeRecord.leftAt = leftAt;
+            activeRecord.duration = duration;
+            activeRecord.isActive = false;
+            
+            await meeting.save();
+            console.log(`✅ Auto-recorded leave for disconnected user: ${userName}, Duration: ${duration}s`);
+          } else {
+            console.log(`⚠️ No active attendance record found for ${userName}`);
+          }
+        }
+        
+        // Also try the saveAttendanceLog function as fallback
+        await saveAttendanceLog(meetingId, user, 'leave');
+        
+      } catch (error) {
+        console.error('❌ Error auto-recording leave:', error);
+      }
       
+      // Emit attendance recorded event to the client (if still connected somehow)
       socket.emit('attendance-recorded', {
         type: 'leave',
         meetingId,
@@ -300,26 +338,39 @@ io.on('connection', (socket) => {
           userName,
           email,
           role,
-          leftAt,
-          duration: Math.round((leftAt - joinedAt) / 1000)
+          leftAt: new Date().toISOString(),
+          duration: Math.round((new Date() - joinedAt) / 1000),
+          isActive: false,
+          disconnected: true
         }
       });
       
-      const meeting = meetings.get(meetingId);
-      if (meeting) {
-        meeting.delete(socket.id);
-        if (meeting.size === 0) {
+      // Emit to all participants that user left
+      socket.to(meetingId).emit('user-left', userId);
+      console.log(`📢 Emitted user-left event for ${userName} to meeting ${meetingId}`);
+      
+      // If user was screen sharing, stop it for everyone
+      if (isScreenSharing) {
+        io.to(meetingId).emit('screen-share-stopped', { userId });
+        console.log(`📺 Screen sharing stopped for disconnected user: ${userName}`);
+      }
+      
+      // Clean up from memory
+      const meetingMap = meetings.get(meetingId);
+      if (meetingMap) {
+        meetingMap.delete(socket.id);
+        console.log(`🗑️ Removed user from meeting ${meetingId}, remaining: ${meetingMap.size}`);
+        if (meetingMap.size === 0) {
           meetings.delete(meetingId);
+          console.log(`🗑️ Meeting ${meetingId} removed from active meetings (no users left)`);
         }
       }
       
       users.delete(socket.id);
+      console.log(`✅ Cleanup complete for disconnected user: ${userName}`);
       
-      socket.to(meetingId).emit('user-left', userId);
-      
-      if (isScreenSharing) {
-        io.to(meetingId).emit('screen-share-stopped', { userId });
-      }
+    } else {
+      console.log(`⚠️ No user found for socket ${socket.id} during disconnect`);
     }
   });
 
@@ -342,6 +393,8 @@ io.on('connection', (socket) => {
         fromUserName: users.get(socket.id)?.userName,
         offer
       });
+    } else {
+      console.log(`⚠️ Could not find target socket for user ${targetUserId} in meeting ${meetingId}`);
     }
   });
 
@@ -456,6 +509,7 @@ io.on('connection', (socket) => {
     const user = users.get(socket.id);
     if (user) {
       user.isScreenSharing = true;
+      console.log(`📺 Screen sharing started by ${userName} (${userId}) in meeting ${meetingId}`);
     }
     io.to(meetingId).emit('screen-share-started', { userId, userName, meetingId });
   });
@@ -464,6 +518,7 @@ io.on('connection', (socket) => {
     const user = users.get(socket.id);
     if (user) {
       user.isScreenSharing = false;
+      console.log(`📺 Screen sharing stopped by ${user.userName} in meeting ${meetingId}`);
     }
     io.to(meetingId).emit('screen-share-stopped', { userId, meetingId });
   });
@@ -498,6 +553,7 @@ io.on('connection', (socket) => {
     
     if (targetSocketId) {
       io.to(targetSocketId).emit('force-mute');
+      console.log(`🔇 Muted participant ${userId} in meeting ${meetingId}`);
     }
   });
 

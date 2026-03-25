@@ -16,12 +16,9 @@ const MeetingRoom = ({ role = 'student' }) => {
   const { meetingId } = useParams();
   const navigate = useNavigate();
   
-  // ✅ ADD THIS DEBUG LOGGING RIGHT HERE
   console.log("🎯 MeetingRoom Component - Meeting ID from URL:", meetingId);
   console.log("🎯 MeetingRoom Component - Role:", role);
   console.log("🎯 MeetingRoom Component - BACKEND_URL:", API_URL);
-  
-  // ... rest of your existing code continues
   
   // ============ ENVIRONMENT VARIABLE ============
   const BACKEND_URL = API_URL;
@@ -69,6 +66,7 @@ const MeetingRoom = ({ role = 'student' }) => {
   const screenPeerConnections = useRef({});
   const videoGridRef = useRef(null);
   const hasRecordedJoin = useRef(false);
+  const hasRecordedLeave = useRef(false);
 
   // STUN Servers
   const configuration = {
@@ -145,6 +143,7 @@ const MeetingRoom = ({ role = 'student' }) => {
             isActive: false
           };
           console.log('✅ Attendance leave recorded in localStorage for:', record.userName, 'Duration:', duration, 'seconds');
+          hasRecordedLeave.current = true;
         }
       }
 
@@ -396,6 +395,12 @@ const MeetingRoom = ({ role = 'student' }) => {
 
   // ============ SCREEN SHARING FUNCTIONS ============
   const ensureScreenShareContainer = (sharerName) => {
+    // First remove existing container if any
+    const existingContainer = document.getElementById('screen-share-container');
+    if (existingContainer) {
+      existingContainer.remove();
+    }
+    
     let screenContainer = document.getElementById('screen-share-container');
     
     if (!screenContainer) {
@@ -422,11 +427,12 @@ const MeetingRoom = ({ role = 'student' }) => {
       header.appendChild(icon);
       header.appendChild(span);
       
+      // Add stop button only for the sharer
       if (role === 'teacher' || userId === screenShareParticipant?.userId) {
         const stopBtn = document.createElement('button');
         stopBtn.className = 'stop-screen-share-btn';
-        stopBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="8" y1="12" x2="16" y2="12"/></svg> Stop';
-        stopBtn.onclick = stopScreenSharing;
+        stopBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="8" y1="12" x2="16" y2="12"/></svg> Stop Sharing';
+        stopBtn.onclick = () => stopScreenSharing();
         header.appendChild(stopBtn);
       }
       
@@ -443,9 +449,11 @@ const MeetingRoom = ({ role = 'student' }) => {
       screenContainer.appendChild(header);
       screenContainer.appendChild(videoWrapper);
       
-      const videoContainer = document.querySelector('.video-container');
+      // Find video container and insert at the top
+      const videoContainer = document.querySelector('.meeting-room .video-container');
       if (videoContainer) {
         videoContainer.insertBefore(screenContainer, videoContainer.firstChild);
+        console.log('✅ Screen share container added at top');
       }
     }
     
@@ -506,27 +514,46 @@ const MeetingRoom = ({ role = 'student' }) => {
   };
 
   const stopScreenSharing = () => {
+    console.log('🛑 Stopping screen share');
+    
+    // Stop all tracks in the stream
     if (screenStreamRef.current) {
-      screenStreamRef.current.getTracks().forEach(track => track.stop());
+      screenStreamRef.current.getTracks().forEach(track => {
+        track.stop();
+        console.log('🛑 Stopped track:', track.kind);
+      });
       screenStreamRef.current = null;
     }
 
+    // Reset state
     setIsScreenSharing(false);
     setScreenShareParticipant(null);
     setHasScreenShare(false);
 
+    // Remove the screen share container from DOM
     const screenContainer = document.getElementById('screen-share-container');
     if (screenContainer) {
       screenContainer.remove();
+      console.log('✅ Screen share container removed');
     }
 
+    // Notify other participants
     socketRef.current?.emit('screen-share-stopped', {
       meetingId,
       userId
     });
 
-    Object.values(screenPeerConnections.current).forEach(pc => pc.close());
+    // Close all screen share peer connections
+    Object.values(screenPeerConnections.current).forEach(pc => {
+      try {
+        pc.close();
+      } catch (err) {
+        console.error('Error closing peer connection:', err);
+      }
+    });
     screenPeerConnections.current = {};
+    
+    console.log('✅ Screen sharing fully stopped and cleaned up');
   };
 
   const createScreenPeerConnection = (targetUserId, stream) => {
@@ -716,6 +743,8 @@ const MeetingRoom = ({ role = 'student' }) => {
 
   // ================= LEAVE FUNCTION =================
   const leaveMeetingOnly = () => {
+    if (hasRecordedLeave.current) return;
+    
     const leaveRecord = {
       userId: userId,
       userName: userName,
@@ -809,6 +838,26 @@ const MeetingRoom = ({ role = 'student' }) => {
 
     initLocalStream();
 
+    // ============ PAGE REFRESH / TAB CLOSE HANDLER ============
+    const handleBeforeUnload = () => {
+      if (!hasRecordedLeave.current && userId && userName && meetingId) {
+        console.log('📝 Recording leave due to page refresh/close for:', userName);
+        const leaveRecord = {
+          userId: userId,
+          userName: userName,
+          role: role,
+          leftAt: new Date().toISOString()
+        };
+        saveAttendanceToLocalStorage("leave", leaveRecord);
+        
+        if (socketRef.current) {
+          socketRef.current.emit('leave-meeting', { meetingId, userId });
+        }
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
     socket.on('connect', () => {
       console.log('✅ Connected to server at:', BACKEND_URL);
       setConnectionStatus('connected');
@@ -889,9 +938,20 @@ const MeetingRoom = ({ role = 'student' }) => {
     
     socket.on('screen-share-started', ({ userId: sharerId, userName: sharerName }) => {
       console.log('📺 Screen sharing started by:', sharerName);
+      
+      // If someone else is already sharing, update to new sharer
+      if (screenShareParticipant && screenShareParticipant.userId !== sharerId) {
+        console.log('⚠️ Another user is already sharing, updating to new sharer');
+        const existingContainer = document.getElementById('screen-share-container');
+        if (existingContainer) {
+          existingContainer.remove();
+        }
+      }
+      
       setScreenShareParticipant({ userId: sharerId, userName: sharerName });
       setHasScreenShare(true);
       
+      // Only create container for viewers, not for the sharer themselves
       if (sharerId !== storedId) {
         ensureScreenShareContainer(sharerName);
       }
@@ -907,11 +967,16 @@ const MeetingRoom = ({ role = 'student' }) => {
         const screenContainer = document.getElementById('screen-share-container');
         if (screenContainer) {
           screenContainer.remove();
+          console.log('✅ Screen share container removed');
         }
       }
       
       if (screenPeerConnections.current[sharerId]) {
-        screenPeerConnections.current[sharerId].close();
+        try {
+          screenPeerConnections.current[sharerId].close();
+        } catch (err) {
+          console.error('Error closing peer connection:', err);
+        }
         delete screenPeerConnections.current[sharerId];
       }
     });
@@ -993,6 +1058,7 @@ const MeetingRoom = ({ role = 'student' }) => {
     });
 
     return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
       Object.values(peerConnections.current).forEach(pc => pc.close());
       Object.values(screenPeerConnections.current).forEach(pc => pc.close());
       

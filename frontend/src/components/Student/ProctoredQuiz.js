@@ -10,6 +10,7 @@ const ProctoredQuiz = () => {
   
   const [quiz, setQuiz] = useState(null);
   const [answers, setAnswers] = useState([]);
+  const [currentQuestion, setCurrentQuestion] = useState(0);
   const [timeLeft, setTimeLeft] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submissionResult, setSubmissionResult] = useState(null);
@@ -55,6 +56,7 @@ const ProctoredQuiz = () => {
       }
     };
   }, [quizId]);
+
 
   // Check if already submitted
   useEffect(() => {
@@ -159,6 +161,24 @@ const ProctoredQuiz = () => {
     }
   }, [quizStarted]);
 
+  useEffect(() => {
+  if (videoStream && videoRef.current) {
+    console.log("Attaching stream to video...");
+
+    videoRef.current.srcObject = videoStream;
+
+    videoRef.current.onloadedmetadata = () => {
+      videoRef.current.play()
+        .then(() => {
+          console.log("✅ Video playing");
+        })
+        .catch(err => {
+          console.error("❌ Play error:", err);
+        });
+    };
+  }
+}, [videoStream]);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -200,47 +220,37 @@ const ProctoredQuiz = () => {
 
   const startQuiz = async () => {
   if (isStartingQuiz || quizStarted) return;
-  
+
   console.log('Start quiz button clicked');
   setIsStartingQuiz(true);
   setStartError('');
-  
+
   try {
-    // Request camera
     console.log('Requesting camera...');
-    const stream = await navigator.mediaDevices.getUserMedia({ 
-      video: true, 
-      audio: true 
+
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: true,
+      audio: true
     });
-    
-    console.log('Camera access granted');
+
+    console.log('Camera access granted:', stream);
+
     setVideoStream(stream);
     
-    if (videoRef.current) {
-      videoRef.current.srcObject = stream;
-      await videoRef.current.play();
-    }
-    
-    // Request fullscreen
-    console.log('Requesting fullscreen...');
-    
-    // DON'T AWAIT fullscreen - let it happen in background
-    const fullscreenPromise = document.documentElement.requestFullscreen();
-    
-    // Immediately set quiz as started without waiting for fullscreen
-    console.log('Starting quiz immediately...');
-    setFullscreen(true);
+
+    // Start quiz AFTER video setup
     setQuizStarted(true);
+    setFullscreen(true);
     setIsStartingQuiz(false);
-    
-    // Handle fullscreen in background
-    fullscreenPromise.catch(err => {
-      console.log('Fullscreen error (non-critical):', err);
-    });
-    
+
+    // Fullscreen (non-blocking)
+    setTimeout(() => {
+      document.documentElement.requestFullscreen().catch(() => {});
+    }, 500);
+
   } catch (err) {
     console.error('Error:', err);
-    setStartError(err.message);
+    setStartError(err.message || "Camera not working");
     setIsStartingQuiz(false);
   }
 };
@@ -423,6 +433,7 @@ const ProctoredQuiz = () => {
   }
 
   if (!submissionResult) {
+     const q = quiz.questions[currentQuestion];
     return (
       <div className="proctored-quiz-container quiz-active">
         <canvas ref={canvasRef} style={{ display: 'none' }} />
@@ -452,55 +463,85 @@ const ProctoredQuiz = () => {
             </div>
           </div>
         </div>
-
+        
         <div className="quiz-main-content">
-          <div className="video-container">
-            <video
-              ref={videoRef}
-              autoPlay
-              muted
-              playsInline
-              className="proctoring-video"
+
+  {/* LEFT SIDE (QUESTION AREA) */}
+  <div className="questions-container">
+
+  <div className="question-block">
+
+    <h3 className="question-title">
+      Question {currentQuestion + 1}
+    </h3>
+
+    <p className="question-text">{q.question}</p>
+
+    {q.type === 'mcq' ? (
+      <div className="options-container">
+        {q.options.map((opt, j) => (
+          <label key={j} className="option-label">
+            <input
+              type="radio"
+              value={opt}
+              checked={answers[currentQuestion] === opt}
+              onChange={() => handleAnswerChange(currentQuestion, opt)}
             />
-          </div>
+            <span className="option-text">{opt}</span>
+          </label>
+        ))}
+      </div>
+    ) : (
+      <input
+        className="blank-input"
+        type="text"
+        value={answers[currentQuestion] || ''}
+        onChange={(e) =>
+          handleAnswerChange(currentQuestion, e.target.value)
+        }
+        placeholder="Type your answer"
+      />
+    )}
 
-          <div className="questions-container">
-            <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }}>
-              {quiz.questions.map((q, i) => (
-                <div key={i} className="question-block">
-                  <p><strong>Q{i + 1}:</strong> {q.question}</p>
+  </div>
 
-                  {q.type === 'mcq' ? (
-                    q.options.map((opt, j) => (
-                      <label key={j} className="option-label">
-                        <input
-                          type="radio"
-                          name={`q-${i}`}
-                          value={opt}
-                          checked={answers[i] === opt}
-                          onChange={() => handleAnswerChange(i, opt)}
-                        />
-                        {opt}
-                      </label>
-                    ))
-                  ) : (
-                    <input
-                      type="text"
-                      value={answers[i] || ''}
-                      onChange={(e) => handleAnswerChange(i, e.target.value)}
-                      placeholder="Type your answer"
-                      className="blank-input"
-                    />
-                  )}
-                </div>
-              ))}
+  <button onClick={handleSubmit} className="submit-quiz-btn">
+    Submit
+  </button>
 
-              <button type="submit" disabled={isSubmitting} className="submit-quiz-btn">
-                {isSubmitting ? 'Submitting...' : 'Submit Quiz'}
-              </button>
-            </form>
-          </div>
-        </div>
+</div>
+
+
+  {/* RIGHT SIDE (QUESTION PALETTE) */}
+  <div className="palette-container">
+    <h3>Questions</h3>
+
+    <div className="palette-grid">
+  {quiz.questions.map((_, i) => (
+    <div
+      key={i}
+      className="palette-item"
+      onClick={() => setCurrentQuestion(i)}
+    >
+      {i + 1}
+    </div>
+  ))}
+</div>
+  </div>
+
+</div>
+
+
+<div className="video-container">
+  <video
+    ref={videoRef}
+    autoPlay
+    muted
+    playsInline
+    className="proctoring-video"
+  />
+</div> 
+
 
         {warnings.length > 0 && (
           <div className="warnings-panel">

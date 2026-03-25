@@ -192,7 +192,7 @@
   background: #1e1f20;
 }
 
-.video-container {
+.meeting-room .video-container {
   flex: 1;
   transition: all 0.3s ease;
   position: relative;
@@ -202,7 +202,7 @@
   height: 100%;
 }
 
-.video-container.with-sidebar {
+.meeting-room .video-container.with-sidebar {
   width: calc(100% - 320px);
 }
 

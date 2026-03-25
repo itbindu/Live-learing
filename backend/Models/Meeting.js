@@ -154,5 +154,30 @@ meetingSchema.methods.getAttendanceSummary = function() {
     createdAt: this.createdAt
   };
 };
-
+// Add this method to the meetingSchema
+meetingSchema.methods.forceEndUserSession = async function(userId) {
+  console.log(`📝 Force ending session for user: ${userId}`);
+  
+  const activeRecord = this.attendance.find(
+    a => a.userId === userId && a.isActive === true
+  );
+  
+  if (activeRecord) {
+    const leftAt = new Date();
+    const joinTime = new Date(activeRecord.joinedAt).getTime();
+    const leaveTime = leftAt.getTime();
+    const duration = Math.round((leaveTime - joinTime) / 1000);
+    
+    activeRecord.leftAt = leftAt;
+    activeRecord.duration = duration;
+    activeRecord.isActive = false;
+    
+    await this.save();
+    console.log(`✅ User ${userId} session ended, Duration: ${duration}s`);
+    return true;
+  }
+  
+  console.log(`⚠️ No active session found for user ${userId}`);
+  return false;
+};
 module.exports = mongoose.models.Meeting || mongoose.model('Meeting', meetingSchema);
