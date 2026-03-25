@@ -1,14 +1,13 @@
-// src/components/MeetingRoom.js
+// src/components/MeetingRoom.js - Cleaned version with correct attendance
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import io from 'socket.io-client';
 import {
   Mic, MicOff, Video, VideoOff, Monitor, Users, MessageSquare,
-  ScreenShare, LogOut, Copy, Check, Clock, X, VolumeX, Share2,
+  LogOut, Copy, Check, Clock, X, VolumeX, Share2,
   Maximize, Minimize, StopCircle, Grid, Layout, 
-  Wifi, WifiOff, Settings, ThumbsUp, Smile
+  Wifi, WifiOff
 } from 'lucide-react';
-import BreakoutRoom from './BreakoutRoom';
 import { API_URL } from '../api/config';
 import './MeetingRoom.css';
 
@@ -16,9 +15,8 @@ const MeetingRoom = ({ role = 'student' }) => {
   const { meetingId } = useParams();
   const navigate = useNavigate();
   
-  console.log("🎯 MeetingRoom Component - Meeting ID from URL:", meetingId);
+  console.log("🎯 MeetingRoom Component - Meeting ID:", meetingId);
   console.log("🎯 MeetingRoom Component - Role:", role);
-  console.log("🎯 MeetingRoom Component - BACKEND_URL:", API_URL);
   
   // ============ ENVIRONMENT VARIABLE ============
   const BACKEND_URL = API_URL;
@@ -54,7 +52,6 @@ const MeetingRoom = ({ role = 'student' }) => {
   const [screenShareParticipant, setScreenShareParticipant] = useState(null);
   const [hasScreenShare, setHasScreenShare] = useState(false);
   const [layout, setLayout] = useState('grid');
-  const [showBreakout, setShowBreakout] = useState(false);
   
   // Refs
   const socketRef = useRef(null);
@@ -90,154 +87,103 @@ const MeetingRoom = ({ role = 'student' }) => {
     iceCandidatePoolSize: 10
   };
 
-  // ============ ATTENDANCE FUNCTION ============
-  const saveAttendanceToLocalStorage = (type, record) => {
+  // ============ ATTENDANCE FUNCTIONS ============
+  const recordJoinToServer = async () => {
+    console.log('🔵 recordJoinToServer - START');
+    console.log('   userId:', userId);
+    console.log('   userName:', userName);
+    console.log('   meetingId:', meetingId);
+    console.log('   userEmail:', userEmail);
+    console.log('   role:', role);
+    console.log('   BACKEND_URL:', BACKEND_URL);
+    
+    if (!userId || !userName || !meetingId) {
+      console.log('❌ Missing required data for join');
+      return;
+    }
+    
     try {
-      if (!record || !record.userId || !record.userName) {
-        console.error('❌ Invalid record for attendance:', record);
-        return;
-      }
+      const url = `${BACKEND_URL}/api/attendance/join`;
+      console.log('📤 POST to:', url);
       
-      const storageKey = `attendance_${meetingId}`;
-      let records = JSON.parse(localStorage.getItem(storageKey) || "[]");
-
-      if (type === "join") {
-        const existingIndex = records.findIndex(
-          r => r.userId === record.userId && !r.leftAt
-        );
-
-        if (existingIndex !== -1) {
-          console.log("⚠️ Already active, skip duplicate join for:", record.userName);
-          return;
-        }
-
-        records.push({
-          userId: record.userId,
-          userName: record.userName,
-          email: record.email || '',
-          role: record.role || role,
-          meetingId: meetingId,
-          joinedAt: new Date().toISOString(),
-          isActive: true,
-          leftAt: null,
-          duration: null
-        });
-        console.log('✅ Attendance join recorded in localStorage for:', record.userName);
-      }
-
-      if (type === "leave") {
-        const existingIndex = records.findIndex(
-          r => r.userId === record.userId && !r.leftAt
-        );
-
-        if (existingIndex !== -1) {
-          const leftAt = new Date().toISOString();
-          const joinTime = new Date(records[existingIndex].joinedAt).getTime();
-          const leaveTime = new Date(leftAt).getTime();
-          const duration = Math.round((leaveTime - joinTime) / 1000);
-
-          records[existingIndex] = {
-            ...records[existingIndex],
-            leftAt,
-            duration: duration,
-            isActive: false
-          };
-          console.log('✅ Attendance leave recorded in localStorage for:', record.userName, 'Duration:', duration, 'seconds');
-          hasRecordedLeave.current = true;
-        }
-      }
-
-      localStorage.setItem(storageKey, JSON.stringify(records));
+      const payload = {
+        meetingId,
+        userId,
+        userName,
+        email: userEmail,
+        role: role
+      };
+      console.log('📦 Payload:', payload);
       
-      // Also try to save to server
-      saveAttendanceToServer(meetingId, type, record);
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
       
+      console.log('📥 Response status:', response.status);
+      const data = await response.json();
+      console.log('📥 Response data:', data);
+      
+      if (data.success) {
+        console.log('✅ Join recorded successfully!');
+      } else {
+        console.log('❌ Join failed:', data);
+      }
     } catch (error) {
-      console.error('Error saving attendance to localStorage:', error);
+      console.error('❌ Fetch error:', error);
     }
   };
 
-  const saveAttendanceToServer = async (meetingId, type, record) => {
+  const recordLeaveToServer = async () => {
+    if (!userId || !meetingId) return;
+    
     try {
-      if (!record || !record.userId || !record.userName) {
-        console.error('❌ Cannot save to server: Invalid record data', record);
-        return;
-      }
+      console.log('📝 Recording LEAVE for:', userName);
       
-      const token = localStorage.getItem('token');
-      
-      console.log(`📤 Sending attendance to server: ${type} for ${record.userName}`);
-      
-      const response = await fetch(`${BACKEND_URL}/api/attendance/record`, {
+      const response = await fetch(`${BACKEND_URL}/api/attendance/leave`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token && { 'Authorization': `Bearer ${token}` })
-        },
-        body: JSON.stringify({
-          meetingId,
-          type,
-          record: {
-            userId: record.userId,
-            userName: record.userName,
-            email: record.email || userEmail,
-            role: record.role || role,
-            joinedAt: record.joinedAt || new Date().toISOString(),
-            leftAt: record.leftAt || null
-          }
-        })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ meetingId, userId })
       });
       
       const data = await response.json();
       
-      if (response.ok) {
-        console.log(`✅ Attendance saved to server: ${type} for ${record.userName}`);
+      if (data.success) {
+        console.log('✅ Leave recorded successfully');
       } else {
-        console.error(`❌ Server error (${response.status}):`, data.error);
+        console.log('⚠️ Leave failed:', data.message);
       }
     } catch (error) {
-      console.error('❌ Error saving attendance to server:', error);
+      console.error('❌ Error recording leave:', error);
     }
   };
 
-  // ============ FETCH ATTENDANCE FROM SERVER ============
+  // ============ JOIN TRACKING - ONLY ONE useEffect ============
   useEffect(() => {
-    const fetchAttendance = async () => {
-      try {
-        const response = await fetch(`${BACKEND_URL}/api/attendance/${meetingId}`);
-        const data = await response.json();
-        
-        if (data.success && data.records && data.records.length > 0) {
-          console.log(`✅ Found ${data.records.length} attendance records from server`);
-          const storageKey = `attendance_${meetingId}`;
-          localStorage.setItem(storageKey, JSON.stringify(data.records));
-        }
-      } catch (error) {
-        console.error('❌ Error fetching attendance:', error);
-      }
-    };
+    console.log('🔍 JOIN useEffect triggered');
+    console.log('   userId:', userId);
+    console.log('   userName:', userName);
+    console.log('   hasRecordedJoin.current:', hasRecordedJoin.current);
     
-    if (meetingId) {
-      fetchAttendance();
+    if (!userId || !userName) {
+      console.log('⏳ Waiting for user data...');
+      return;
     }
-  }, [meetingId, BACKEND_URL]);
-
-  // ============ JOIN TRACKING ============
-  useEffect(() => {
-    if (!userId || !userName || hasRecordedJoin.current) return;
     
-    const joinRecord = {
-      userId: userId,
-      userName: userName,
-      email: userEmail,
-      role: role,
-      joinedAt: new Date().toISOString()
-    };
+    if (hasRecordedJoin.current) {
+      console.log('⚠️ Join already recorded, skipping');
+      return;
+    }
     
-    console.log('📝 Recording join for:', userName);
-    saveAttendanceToLocalStorage("join", joinRecord);
+    console.log('🎯 Recording join NOW for user:', userName);
+    recordJoinToServer();
     hasRecordedJoin.current = true;
-  }, [userId, userName, userEmail, role]);
+    
+  }, [userId, userName]);
 
   // ============ MEDIA FUNCTIONS ============
   const initLocalStream = async () => {
@@ -395,7 +341,6 @@ const MeetingRoom = ({ role = 'student' }) => {
 
   // ============ SCREEN SHARING FUNCTIONS ============
   const ensureScreenShareContainer = (sharerName) => {
-    // First remove existing container if any
     const existingContainer = document.getElementById('screen-share-container');
     if (existingContainer) {
       existingContainer.remove();
@@ -427,7 +372,6 @@ const MeetingRoom = ({ role = 'student' }) => {
       header.appendChild(icon);
       header.appendChild(span);
       
-      // Add stop button only for the sharer
       if (role === 'teacher' || userId === screenShareParticipant?.userId) {
         const stopBtn = document.createElement('button');
         stopBtn.className = 'stop-screen-share-btn';
@@ -449,7 +393,6 @@ const MeetingRoom = ({ role = 'student' }) => {
       screenContainer.appendChild(header);
       screenContainer.appendChild(videoWrapper);
       
-      // Find video container and insert at the top
       const videoContainer = document.querySelector('.meeting-room .video-container');
       if (videoContainer) {
         videoContainer.insertBefore(screenContainer, videoContainer.firstChild);
@@ -516,7 +459,6 @@ const MeetingRoom = ({ role = 'student' }) => {
   const stopScreenSharing = () => {
     console.log('🛑 Stopping screen share');
     
-    // Stop all tracks in the stream
     if (screenStreamRef.current) {
       screenStreamRef.current.getTracks().forEach(track => {
         track.stop();
@@ -525,25 +467,21 @@ const MeetingRoom = ({ role = 'student' }) => {
       screenStreamRef.current = null;
     }
 
-    // Reset state
     setIsScreenSharing(false);
     setScreenShareParticipant(null);
     setHasScreenShare(false);
 
-    // Remove the screen share container from DOM
     const screenContainer = document.getElementById('screen-share-container');
     if (screenContainer) {
       screenContainer.remove();
       console.log('✅ Screen share container removed');
     }
 
-    // Notify other participants
     socketRef.current?.emit('screen-share-stopped', {
       meetingId,
       userId
     });
 
-    // Close all screen share peer connections
     Object.values(screenPeerConnections.current).forEach(pc => {
       try {
         pc.close();
@@ -704,20 +642,12 @@ const MeetingRoom = ({ role = 'student' }) => {
   const toggleParticipants = () => {
     setShowParticipants(!showParticipants);
     setShowChat(false);
-    setShowBreakout(false);
   };
 
   const toggleChat = () => {
     setShowChat(!showChat);
     setShowParticipants(false);
-    setShowBreakout(false);
     if (!showChat) setUnreadMessages(0);
-  };
-
-  const toggleBreakout = () => {
-    setShowBreakout(!showBreakout);
-    setShowParticipants(false);
-    setShowChat(false);
   };
 
   const toggleFullscreen = () => {
@@ -745,15 +675,9 @@ const MeetingRoom = ({ role = 'student' }) => {
   const leaveMeetingOnly = () => {
     if (hasRecordedLeave.current) return;
     
-    const leaveRecord = {
-      userId: userId,
-      userName: userName,
-      role: role,
-      leftAt: new Date().toISOString()
-    };
-    
-    console.log('📝 Recording leave for:', userName);
-    saveAttendanceToLocalStorage("leave", leaveRecord);
+    console.log('🎯 Recording leave for user:', userName);
+    recordLeaveToServer();
+    hasRecordedLeave.current = true;
 
     if (isScreenSharing) stopScreenSharing();
 
@@ -769,23 +693,14 @@ const MeetingRoom = ({ role = 'student' }) => {
     if (role !== 'teacher') return;
     
     participants.forEach(participant => {
-      const leaveRecord = {
-        userId: participant.userId,
-        userName: participant.userName,
-        role: participant.role,
-        leftAt: new Date().toISOString()
-      };
-      saveAttendanceToLocalStorage('leave', leaveRecord);
+      fetch(`${BACKEND_URL}/api/attendance/leave`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ meetingId, userId: participant.userId })
+      }).catch(err => console.error('Error recording leave:', err));
     });
     
-    // Also record the teacher's own leave
-    const teacherLeaveRecord = {
-      userId: userId,
-      userName: userName,
-      role: role,
-      leftAt: new Date().toISOString()
-    };
-    saveAttendanceToLocalStorage('leave', teacherLeaveRecord);
+    recordLeaveToServer();
     
     if (isScreenSharing) stopScreenSharing();
     socketRef.current?.emit('end-meeting', { meetingId });
@@ -794,7 +709,15 @@ const MeetingRoom = ({ role = 'student' }) => {
 
   // ============ INITIALIZE ============
   useEffect(() => {
+    // Get consistent userId from localStorage
     let storedId = localStorage.getItem("meetingUserId");
+    
+    if (!storedId) {
+      const studentEmail = localStorage.getItem('studentEmail');
+      if (studentEmail) {
+        storedId = localStorage.getItem(`studentId_${studentEmail}`);
+      }
+    }
     
     if (!storedId) {
       storedId = `${role}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -819,6 +742,7 @@ const MeetingRoom = ({ role = 'student' }) => {
       setUserEmail(studentEmail);
       console.log('Student name set to:', studentName);
       console.log('Student email set to:', studentEmail);
+      console.log('Student ID set to:', storedId);
     }
 
     const storedTopic = localStorage.getItem(`meetingTopic_${meetingId}`) || 'Virtual Classroom';
@@ -837,26 +761,6 @@ const MeetingRoom = ({ role = 'student' }) => {
     socketRef.current = socket;
 
     initLocalStream();
-
-    // ============ PAGE REFRESH / TAB CLOSE HANDLER ============
-    const handleBeforeUnload = () => {
-      if (!hasRecordedLeave.current && userId && userName && meetingId) {
-        console.log('📝 Recording leave due to page refresh/close for:', userName);
-        const leaveRecord = {
-          userId: userId,
-          userName: userName,
-          role: role,
-          leftAt: new Date().toISOString()
-        };
-        saveAttendanceToLocalStorage("leave", leaveRecord);
-        
-        if (socketRef.current) {
-          socketRef.current.emit('leave-meeting', { meetingId, userId });
-        }
-      }
-    };
-
-    window.addEventListener('beforeunload', handleBeforeUnload);
 
     socket.on('connect', () => {
       console.log('✅ Connected to server at:', BACKEND_URL);
@@ -928,10 +832,6 @@ const MeetingRoom = ({ role = 'student' }) => {
       }
     });
 
-    socket.on('attendance-recorded', (data) => {
-      console.log('📊 Attendance recorded from server:', data);
-    });
-
     socket.on('receive-offer', handleReceiveOffer);
     socket.on('receive-answer', handleReceiveAnswer);
     socket.on('receive-ice-candidate', handleReceiveICECandidate);
@@ -939,7 +839,6 @@ const MeetingRoom = ({ role = 'student' }) => {
     socket.on('screen-share-started', ({ userId: sharerId, userName: sharerName }) => {
       console.log('📺 Screen sharing started by:', sharerName);
       
-      // If someone else is already sharing, update to new sharer
       if (screenShareParticipant && screenShareParticipant.userId !== sharerId) {
         console.log('⚠️ Another user is already sharing, updating to new sharer');
         const existingContainer = document.getElementById('screen-share-container');
@@ -951,7 +850,6 @@ const MeetingRoom = ({ role = 'student' }) => {
       setScreenShareParticipant({ userId: sharerId, userName: sharerName });
       setHasScreenShare(true);
       
-      // Only create container for viewers, not for the sharer themselves
       if (sharerId !== storedId) {
         ensureScreenShareContainer(sharerName);
       }
@@ -1026,16 +924,7 @@ const MeetingRoom = ({ role = 'student' }) => {
       console.log('🏁 Meeting ended by host:', data);
       alert('Meeting has ended by the host. You will be redirected to dashboard.');
       
-      const finalRecord = {
-        userId: storedId,
-        userName: userName,
-        email: userEmail,
-        role: role,
-        leftAt: new Date().toISOString(),
-        meetingEnded: true
-      };
-      
-      saveAttendanceToLocalStorage('leave', finalRecord);
+      recordLeaveToServer();
       
       if (isScreenSharing) {
         stopScreenSharing();
@@ -1058,7 +947,6 @@ const MeetingRoom = ({ role = 'student' }) => {
     });
 
     return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
       Object.values(peerConnections.current).forEach(pc => pc.close());
       Object.values(screenPeerConnections.current).forEach(pc => pc.close());
       
@@ -1137,14 +1025,11 @@ const MeetingRoom = ({ role = 'student' }) => {
           <button className="icon-btn" onClick={toggleFullscreen} title="Toggle fullscreen">
             {isFullscreen ? <Minimize size={18} /> : <Maximize size={18} />}
           </button>
-          <button className="icon-btn" title="Settings">
-            <Settings size={18} />
-          </button>
         </div>
       </header>
 
       <main className="meeting-main">
-        <div className={`video-container ${showParticipants || showChat || showBreakout ? 'with-sidebar' : ''}`}>
+        <div className={`video-container ${showParticipants || showChat ? 'with-sidebar' : ''}`}>
           <div 
             className={`video-grid ${layout} ${hasScreenShare ? 'has-screen-share' : ''}`}
             ref={videoGridRef}
@@ -1312,28 +1197,6 @@ const MeetingRoom = ({ role = 'student' }) => {
           </div>
         )}
 
-        {showBreakout && (
-          <div className="sidebar breakout-sidebar">
-            <div className="sidebar-header">
-              <h3>
-                <Users size={16} />
-                Breakout Rooms
-              </h3>
-              <button className="close-btn" onClick={toggleBreakout}>
-                <X size={18} />
-              </button>
-            </div>
-            <BreakoutRoom
-              meetingId={meetingId}
-              userId={userId}
-              userName={userName}
-              role={role}
-              participants={participants}
-              socket={socketRef.current}
-            />
-          </div>
-        )}
-
         {showLeaveOptions && (
           <div className="modal-overlay">
             <div className="leave-modal">
@@ -1403,14 +1266,6 @@ const MeetingRoom = ({ role = 'student' }) => {
         </div>
 
         <div className="footer-center">
-          <button className="control-btn" title="Reactions">
-            <ThumbsUp size={22} />
-          </button>
-          
-          <button className="control-btn" title="Raise hand">
-            <Smile size={22} />
-          </button>
-          
           <button 
             className={`control-btn ${showChat ? 'active' : ''}`} 
             onClick={toggleChat}
@@ -1419,16 +1274,6 @@ const MeetingRoom = ({ role = 'student' }) => {
             <MessageSquare size={22} />
             {unreadMessages > 0 && <span className="badge">{unreadMessages}</span>}
           </button>
-
-          {role === 'teacher' && (
-            <button 
-              className={`control-btn ${showBreakout ? 'active' : ''}`} 
-              onClick={toggleBreakout}
-              title="Breakout Rooms"
-            >
-              <Users size={22} />
-            </button>
-          )}
         </div>
 
         <div className="footer-right">

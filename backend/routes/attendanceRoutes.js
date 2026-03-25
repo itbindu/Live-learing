@@ -3,18 +3,16 @@ const express = require("express");
 const router = express.Router();
 const Meeting = require("../Models/Meeting");
 
-// ================= GET ALL MEETINGS WITH ATTENDANCE (MUST COME FIRST) =================
+// ================= GET ALL MEETINGS WITH ATTENDANCE =================
 router.get("/all", async (req, res) => {
   console.log("📊 Fetching ALL meetings with attendance");
   console.log("=" .repeat(50));
 
   try {
-    // Find ALL meetings - don't filter anything
     const meetings = await Meeting.find({}).sort({ createdAt: -1 });
     
     console.log(`✅ Found ${meetings.length} total meetings in database`);
     
-    // Log each meeting for debugging
     meetings.forEach((meeting, index) => {
       console.log(`\n📌 Meeting ${index + 1}:`);
       console.log(`   ID: ${meeting.meetingId}`);
@@ -23,7 +21,6 @@ router.get("/all", async (req, res) => {
       console.log(`   Is Active: ${meeting.isActive}`);
     });
     
-    // Format the response
     const meetingData = meetings.map(meeting => ({
       meetingId: meeting.meetingId,
       title: meeting.title,
@@ -50,12 +47,171 @@ router.get("/all", async (req, res) => {
   }
 });
 
+// ================= JOIN MEETING - RECORD ATTENDANCE =================
+router.post("/join", async (req, res) => {
+  console.log("=" .repeat(50));
+  console.log("🔵 JOIN ATTENDANCE REQUEST");
+  console.log("Body:", req.body);
+  console.log("=" .repeat(50));
+  
+  const { meetingId, userId, userName, email, role } = req.body;
+
+  if (!meetingId || !userId || !userName) {
+    return res.status(400).json({ 
+      error: "Missing required fields", 
+      success: false,
+      required: ["meetingId", "userId", "userName"]
+    });
+  }
+
+  try {
+    let meeting = await Meeting.findOne({ meetingId });
+
+    if (!meeting) {
+      console.log(`⚠️ Meeting ${meetingId} not found, creating new...`);
+      meeting = new Meeting({
+        meetingId,
+        title: "Virtual Classroom",
+        teacherId: null,
+        participants: [],
+        attendance: []
+      });
+      await meeting.save();
+      console.log(`✅ Created new meeting: ${meetingId}`);
+    }
+
+    // Check if user already has an active session
+    const existingActive = meeting.attendance.find(
+      a => a.userId === userId && a.isActive === true
+    );
+
+    if (existingActive) {
+      console.log(`⚠️ User ${userName} already has active attendance in this meeting`);
+      return res.json({ 
+        success: true, 
+        message: "User already has active attendance",
+        alreadyActive: true,
+        record: existingActive
+      });
+    }
+
+    // Add new attendance record
+    const newRecord = {
+      userId: userId,
+      userName: userName,
+      email: email || "",
+      role: role || "student",
+      joinedAt: new Date(),
+      isActive: true,
+      leftAt: null,
+      duration: null
+    };
+    
+    meeting.attendance.push(newRecord);
+    
+    // Also add to participants for compatibility
+    meeting.participants.push({
+      name: userName,
+      email: email || "",
+      joinedAt: new Date()
+    });
+    
+    await meeting.save();
+    
+    console.log(`✅ JOIN recorded for ${userName} in meeting ${meetingId}`);
+    console.log(`   Attendance count: ${meeting.attendance.length}`);
+    
+    res.json({ 
+      success: true, 
+      message: "Join recorded successfully",
+      record: newRecord,
+      attendanceCount: meeting.attendance.length
+    });
+
+  } catch (error) {
+    console.error("❌ Error recording join:", error);
+    res.status(500).json({ error: "Internal server error", success: false });
+  }
+});
+
+// ================= LEAVE MEETING - RECORD ATTENDANCE =================
+router.post("/leave", async (req, res) => {
+  console.log("=" .repeat(50));
+  console.log("🔴 LEAVE ATTENDANCE REQUEST");
+  console.log("Body:", req.body);
+  console.log("=" .repeat(50));
+  
+  const { meetingId, userId } = req.body;
+
+  if (!meetingId || !userId) {
+    return res.status(400).json({ 
+      error: "Missing required fields", 
+      success: false,
+      required: ["meetingId", "userId"]
+    });
+  }
+
+  try {
+    const meeting = await Meeting.findOne({ meetingId });
+    
+    if (!meeting) {
+      console.log(`⚠️ Meeting ${meetingId} not found`);
+      return res.status(404).json({ error: "Meeting not found", success: false });
+    }
+
+    // Find active attendance record for this user
+    const activeRecord = meeting.attendance.find(
+      a => a.userId === userId && a.isActive === true
+    );
+
+    if (!activeRecord) {
+      console.log(`⚠️ No active attendance found for user ${userId}`);
+      return res.json({ 
+        success: true, 
+        message: "No active attendance found",
+        alreadyLeft: true
+      });
+    }
+
+    // Calculate duration
+    const leftAt = new Date();
+    const joinTime = new Date(activeRecord.joinedAt).getTime();
+    const leaveTime = leftAt.getTime();
+    const duration = Math.round((leaveTime - joinTime) / 1000);
+
+    // Update the record
+    activeRecord.leftAt = leftAt;
+    activeRecord.duration = duration;
+    activeRecord.isActive = false;
+    
+    await meeting.save();
+    
+    console.log(`✅ LEAVE recorded for ${activeRecord.userName} in meeting ${meetingId}`);
+    console.log(`   Duration: ${duration} seconds (${Math.floor(duration / 60)} minutes ${duration % 60} seconds)`);
+    
+    res.json({ 
+      success: true, 
+      message: "Leave recorded successfully",
+      record: {
+        userId: activeRecord.userId,
+        userName: activeRecord.userName,
+        joinedAt: activeRecord.joinedAt,
+        leftAt: leftAt,
+        duration: duration
+      }
+    });
+
+  } catch (error) {
+    console.error("❌ Error recording leave:", error);
+    res.status(500).json({ error: "Internal server error", success: false });
+  }
+});
+
 // ================= GET ATTENDANCE FOR A SPECIFIC MEETING =================
 router.get("/:meetingId", async (req, res) => {
   const { meetingId } = req.params;
   console.log(`📊 Fetching attendance for meeting: ${meetingId}`);
 
-  // Skip if it's the "all" endpoint (already handled above)
   if (meetingId === "all") {
     console.log("⚠️ Skipping - this should be handled by /all route");
     return;
@@ -91,104 +247,6 @@ router.get("/:meetingId", async (req, res) => {
     });
   } catch (error) {
     console.error("❌ Error fetching attendance:", error);
-    res.status(500).json({ error: "Internal server error", success: false });
-  }
-});
-
-// ================= SAVE ATTENDANCE TO MONGODB =================
-router.post("/record", async (req, res) => {
-  console.log("=" .repeat(50));
-  console.log("📝 ATTENDANCE RECORD REQUEST RECEIVED");
-  console.log("Meeting ID:", req.body.meetingId);
-  console.log("Type:", req.body.type);
-  console.log("User:", req.body.record?.userName);
-  console.log("=" .repeat(50));
-  
-  const { meetingId, type, record } = req.body;
-
-  if (!meetingId || !type || !record) {
-    return res.status(400).json({ error: "Missing required fields", success: false });
-  }
-
-  try {
-    let meeting = await Meeting.findOne({ meetingId });
-
-    if (!meeting) {
-      console.log(`⚠️ Meeting ${meetingId} not found, creating new...`);
-      meeting = new Meeting({
-        meetingId,
-        title: record.meetingTitle || "Virtual Classroom",
-        teacherId: record.teacherId || null,
-        participants: [],
-        attendance: []
-      });
-      await meeting.save();
-      console.log(`✅ Created new meeting: ${meetingId}`);
-    } else {
-      console.log(`✅ Found existing meeting: ${meetingId}`);
-      console.log(`   Current attendance count: ${meeting.attendance?.length || 0}`);
-    }
-
-    if (type === "join") {
-      // Check if user already has an active session
-      const existingRecord = meeting.attendance.find(
-        a => a.userId === record.userId && a.isActive === true
-      );
-
-      if (!existingRecord) {
-        meeting.attendance.push({
-          userId: record.userId,
-          userName: record.userName,
-          email: record.email || "",
-          role: record.role || "student",
-          joinedAt: record.joinedAt || new Date(),
-          isActive: true,
-          leftAt: null,
-          duration: null
-        });
-        
-        meeting.participants.push({
-          name: record.userName,
-          email: record.email || "",
-          joinedAt: new Date()
-        });
-        
-        await meeting.save();
-        console.log(`✅ Attendance join recorded for ${record.userName}`);
-        console.log(`   New attendance count: ${meeting.attendance.length}`);
-      } else {
-        console.log(`⚠️ User ${record.userName} already has active attendance`);
-      }
-    }
-
-    if (type === "leave") {
-      // Find active record for this user
-      const activeRecord = meeting.attendance.find(
-        a => a.userId === record.userId && a.isActive === true
-      );
-
-      if (activeRecord) {
-        const leftAt = record.leftAt || new Date();
-        const joinTime = new Date(activeRecord.joinedAt).getTime();
-        const leaveTime = new Date(leftAt).getTime();
-        const duration = Math.round((leaveTime - joinTime) / 1000);
-
-        activeRecord.leftAt = leftAt;
-        activeRecord.duration = duration;
-        activeRecord.isActive = false;
-        
-        await meeting.save();
-        console.log(`✅ Attendance leave recorded for ${record.userName}`);
-        console.log(`   Duration: ${duration} seconds`);
-      } else {
-        console.log(`⚠️ No active attendance found for ${record.userName}`);
-      }
-    }
-
-    res.json({ success: true, records: meeting.attendance });
-
-  } catch (error) {
-    console.error("❌ Error saving attendance:", error);
     res.status(500).json({ error: "Internal server error", success: false });
   }
 });

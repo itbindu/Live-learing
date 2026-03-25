@@ -479,17 +479,23 @@ const ProctoredQuiz = () => {
 
     {q.type === 'mcq' ? (
       <div className="options-container">
-        {q.options.map((opt, j) => (
-          <label key={j} className="option-label">
-            <input
-              type="radio"
-              value={opt}
-              checked={answers[currentQuestion] === opt}
-              onChange={() => handleAnswerChange(currentQuestion, opt)}
-            />
-            <span className="option-text">{opt}</span>
-          </label>
-        ))}
+        {q.options.map((opt, j) => {
+  const optionLetter = String.fromCharCode(65 + j); // A, B, C, D
+
+  return (
+    <label key={j} className="option-label">
+      <input
+        type="radio"
+        value={optionLetter}
+        checked={answers[currentQuestion] === optionLetter}
+        onChange={() => handleAnswerChange(currentQuestion, optionLetter)}
+      />
+      <span className="option-text">
+        <strong>{optionLetter}.</strong> {opt}
+      </span>
+    </label>
+  );
+})}
       </div>
     ) : (
       <input
