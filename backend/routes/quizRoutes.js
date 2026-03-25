@@ -434,7 +434,30 @@ router.delete('/:id', authenticateToken, async (req, res) => {
     res.status(500).json({ message: 'Failed to delete quiz' });
   }
 });
+// GET QUIZ RESULT (Student)
+router.get('/result/:quizId', authenticateToken, async (req, res) => {
+  try {
+    const submission = await Submission.findOne({
+      studentId: req.user.id,
+      quizId: req.params.quizId
+    });
 
+    if (!submission) {
+      return res.status(404).json({ message: 'Result not found' });
+    }
+
+    const quiz = await Quiz.findById(req.params.quizId);
+
+    res.json({
+      score: submission.score,
+      total: quiz.questions.length,
+      percentage: Math.round((submission.score / quiz.questions.length) * 100)
+    });
+
+  } catch (err) {
+    res.status(500).json({ message: 'Error fetching result' });
+  }
+});
 // GET SINGLE QUIZ
 router.get('/:id', authenticateToken, async (req, res) => {
   try {

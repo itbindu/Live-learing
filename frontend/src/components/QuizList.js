@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api/config';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import './QuizList.css';
 
 const QuizList = () => {
+  const navigate = useNavigate();
   const [quizzes, setQuizzes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -75,7 +76,23 @@ const QuizList = () => {
 
   return (
     <div className="quiz-list-container">
-      <h2>Available Quizzes</h2>
+      <button
+  onClick={() => navigate('/student/dashboard')}
+  style={{
+    position: 'absolute',
+    top: '20px',
+    left: '20px',
+    background: '#1e293b',
+    color: 'white',
+    border: 'none',
+    padding: '8px 12px',
+    borderRadius: '50%',
+    cursor: 'pointer',
+    fontSize: '18px'
+  }}
+>
+  ←
+</button>
       
       {error && (
         <div className="error-message">

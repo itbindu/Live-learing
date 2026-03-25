@@ -27,6 +27,8 @@ import StudentLMS from './components/Student/StudentLMS';
 
 import QuizList from './components/QuizList';
 import TakeQuiz from './components/TakeQuiz';
+import QuizResult from './components/QuizResult';
+
 import TeacherQuizList from './components/TeacherQuizList';
 import Leaderboard from './components/Leaderboard';
 import CreateQuiz from './components/CreateQuiz';
@@ -72,6 +74,7 @@ function App() {
           {/* Student Quiz Routes */}
           <Route path="/student/quizzes" element={<QuizList />} />
           <Route path="/take-quiz/:quizId" element={<TakeQuiz />} />
+          <Route path="/quiz-result/:quizId" element={<QuizResult />} />
           <Route path="/student/attendance" element={<AttendancePage role="student" />} />
           <Route path="/student/leaderboard" element={<StudentLeaderboard />} />
           <Route path="/proctored-quiz/:quizId" element={<ProctoredQuiz />} />

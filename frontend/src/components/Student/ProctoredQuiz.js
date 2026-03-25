@@ -8,6 +8,36 @@ const ProctoredQuiz = () => {
   const { quizId } = useParams();
   const navigate = useNavigate();
   
+  // --- SAMPLE QUIZ DATA (for demonstration, will be replaced by API data) ---
+  const sampleQuiz = {
+    _id: 'sample123',
+    title: 'JavaScript Fundamentals',
+    timeLimit: 5,
+    questions: [
+      {
+        type: 'mcq',
+        question: 'Which of the following is used to declare a variable in JavaScript?',
+        options: ['var', 'let', 'const', 'All of the above']
+      },
+      {
+        type: 'mcq',
+        question: 'What does the `===` operator do?',
+        options: ['Compares values only', 'Compares values and types', 'Assigns a value', 'None of the above']
+      },
+      {
+        type: 'fill',
+        question: 'The _______ keyword is used to declare a constant variable in JavaScript.',
+        options: []
+      },
+      {
+        type: 'mcq',
+        question: 'Which company developed JavaScript?',
+        options: ['Microsoft', 'Netscape', 'Google', 'Apple']
+      }
+    ]
+  };
+  // --- END SAMPLE DATA ---
+  
   const [quiz, setQuiz] = useState(null);
   const [answers, setAnswers] = useState([]);
   const [currentQuestion, setCurrentQuestion] = useState(0);
@@ -57,9 +87,18 @@ const ProctoredQuiz = () => {
     };
   }, [quizId]);
 
-
-  // Check if already submitted
+  // Check if already submitted (skip for sample)
   useEffect(() => {
+    // For demo, we skip API check and use sample data
+    if (quizId === 'sample123') {
+      setQuiz(sampleQuiz);
+      const safeTimeLimit = sampleQuiz.timeLimit > 0 ? sampleQuiz.timeLimit : 60;
+      setTimeLeft(safeTimeLimit * 60);
+      setAnswers(new Array(sampleQuiz.questions.length).fill(''));
+      setLoading(false);
+      return;
+    }
+    
     const checkSubmission = async () => {
       try {
         if (!quizId || quizId.length < 10) {
@@ -85,12 +124,22 @@ const ProctoredQuiz = () => {
     checkSubmission();
   }, [quizId, navigate]);
 
-  // Fetch quiz data
+  // Fetch quiz data (will be overridden by sample for demo)
   useEffect(() => {
     const fetchQuiz = async () => {
       try {
         setLoading(true);
         setError('');
+        
+        // For demo, if it's sample123, use sample data
+        if (quizId === 'sample123') {
+          setQuiz(sampleQuiz);
+          const safeTimeLimit = sampleQuiz.timeLimit > 0 ? sampleQuiz.timeLimit : 60;
+          setTimeLeft(safeTimeLimit * 60);
+          setAnswers(new Array(sampleQuiz.questions.length).fill(''));
+          setLoading(false);
+          return;
+        }
         
         const token = localStorage.getItem('token');
         if (!token) {
@@ -121,7 +170,15 @@ const ProctoredQuiz = () => {
     
     if (quizId && quizId.length > 10) {
       fetchQuiz();
-    } else {
+    } else if (quizId === 'sample123') {
+      // Already handled above, but ensure it's set
+      if (!quiz) {
+        setQuiz(sampleQuiz);
+        setTimeLeft(sampleQuiz.timeLimit * 60);
+        setAnswers(new Array(sampleQuiz.questions.length).fill(''));
+        setLoading(false);
+      }
+    } else if (quizId) {
       setError('Invalid quiz ID');
       setLoading(false);
     }
@@ -162,22 +219,20 @@ const ProctoredQuiz = () => {
   }, [quizStarted]);
 
   useEffect(() => {
-  if (videoStream && videoRef.current) {
-    console.log("Attaching stream to video...");
-
-    videoRef.current.srcObject = videoStream;
-
-    videoRef.current.onloadedmetadata = () => {
-      videoRef.current.play()
-        .then(() => {
-          console.log("✅ Video playing");
-        })
-        .catch(err => {
-          console.error("❌ Play error:", err);
-        });
-    };
-  }
-}, [videoStream]);
+    if (videoStream && videoRef.current) {
+      console.log("Attaching stream to video...");
+      videoRef.current.srcObject = videoStream;
+      videoRef.current.onloadedmetadata = () => {
+        videoRef.current.play()
+          .then(() => {
+            console.log("✅ Video playing");
+          })
+          .catch(err => {
+            console.error("❌ Play error:", err);
+          });
+      };
+    }
+  }, [videoStream]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -219,41 +274,32 @@ const ProctoredQuiz = () => {
   };
 
   const startQuiz = async () => {
-  if (isStartingQuiz || quizStarted) return;
+    if (isStartingQuiz || quizStarted) return;
 
-  console.log('Start quiz button clicked');
-  setIsStartingQuiz(true);
-  setStartError('');
+    console.log('Start quiz button clicked');
+    setIsStartingQuiz(true);
+    setStartError('');
 
-  try {
-    console.log('Requesting camera...');
-
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: true,
-      audio: true
-    });
-
-    console.log('Camera access granted:', stream);
-
-    setVideoStream(stream);
-    
-
-    // Start quiz AFTER video setup
-    setQuizStarted(true);
-    setFullscreen(true);
-    setIsStartingQuiz(false);
-
-    // Fullscreen (non-blocking)
-    setTimeout(() => {
-      document.documentElement.requestFullscreen().catch(() => {});
-    }, 500);
-
-  } catch (err) {
-    console.error('Error:', err);
-    setStartError(err.message || "Camera not working");
-    setIsStartingQuiz(false);
-  }
-};
+    try {
+      console.log('Requesting camera...');
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: true
+      });
+      console.log('Camera access granted:', stream);
+      setVideoStream(stream);
+      setQuizStarted(true);
+      setFullscreen(true);
+      setIsStartingQuiz(false);
+      setTimeout(() => {
+        document.documentElement.requestFullscreen().catch(() => {});
+      }, 500);
+    } catch (err) {
+      console.error('Error:', err);
+      setStartError(err.message || "Camera not working");
+      setIsStartingQuiz(false);
+    }
+  };
 
   const addWarning = (message) => {
     setWarningCount(prev => {
@@ -262,6 +308,13 @@ const ProctoredQuiz = () => {
         message,
         timestamp: new Date().toLocaleTimeString()
       }]);
+      
+      // Auto-submit if 3 warnings reached
+      if (newCount >= 3 && !isSubmitting && !submissionResult) {
+        alert('Maximum warnings (3) reached. Quiz will be submitted automatically.');
+        handleSubmit();
+      }
+      
       return newCount;
     });
   };
@@ -272,30 +325,81 @@ const ProctoredQuiz = () => {
     setAnswers(updated);
   };
 
+  const handlePrevious = () => {
+    if (currentQuestion > 0) {
+      setCurrentQuestion(prev => prev - 1);
+    }
+  };
+
+  const handleNext = () => {
+    if (currentQuestion < quiz.questions.length - 1) {
+      setCurrentQuestion(prev => prev + 1);
+    } else {
+      alert('This is the last question. Please submit your quiz.');
+    }
+  };
+
+  const handleSkip = () => {
+    if (currentQuestion < quiz.questions.length - 1) {
+      setCurrentQuestion(prev => prev + 1);
+    } else {
+      alert('This is the last question. Please submit your quiz.');
+    }
+  };
+
+  const handleFinish = () => {
+    const unanswered = answers.filter(ans => !ans || ans === '').length;
+    if (unanswered > 0) {
+      const confirmFinish = window.confirm(`You have ${unanswered} unanswered question(s). Are you sure you want to finish?`);
+      if (confirmFinish) {
+        handleSubmit();
+      }
+    } else {
+      handleSubmit();
+    }
+  };
+
   const handleSubmit = async () => {
     if (isSubmitting || submissionResult) return;
     
-    const confirmSubmit = window.confirm('Submit quiz?');
+    const confirmSubmit = window.confirm('Are you sure you want to submit your quiz?');
     if (!confirmSubmit) return;
     
     setIsSubmitting(true);
 
     try {
+      // For demo, calculate score based on sample answers
+      if (quizId === 'sample123') {
+        let correct = 0;
+        const correctAnswersMap = ['D', 'B', 'const', 'B']; // D, B, const, B
+        answers.forEach((ans, idx) => {
+          if (ans && ans.toUpperCase() === correctAnswersMap[idx].toUpperCase()) correct++;
+        });
+        const percentage = (correct / quiz.questions.length) * 100;
+        setSubmissionResult({
+          score: correct,
+          percentage: Math.round(percentage),
+          correctAnswers: correct,
+        });
+        if (document.fullscreenElement) {
+          await document.exitFullscreen();
+        }
+        setIsSubmitting(false);
+        return;
+      }
+      
       const res = await api.post(`/api/quizzes/submit/${quizId}`, { answers });
-
       setSubmissionResult({
         score: res.data.score,
         percentage: res.data.percentage,
         correctAnswers: res.data.correctAnswers,
       });
-      
       if (document.fullscreenElement) {
         await document.exitFullscreen();
       }
-      
     } catch (err) {
       console.error('Submit failed:', err);
-      alert('Could not submit quiz');
+      alert('Could not submit quiz. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -305,22 +409,70 @@ const ProctoredQuiz = () => {
   const setupProctoringFeatures = () => {
     addSafeEventListener(document, 'fullscreenchange', () => {
       setFullscreen(!!document.fullscreenElement);
-      if (!document.fullscreenElement && quizStarted) {
-        addWarning('Exited fullscreen');
+      if (!document.fullscreenElement && quizStarted && !isSubmitting) {
+        addWarning('Exited fullscreen mode');
+        // Re-request fullscreen
         document.documentElement.requestFullscreen().catch(err => {});
       }
     });
     
     addSafeEventListener(document, 'visibilitychange', () => {
-      if (document.hidden && quizStarted) {
-        addWarning('Tab switched');
+      if (document.hidden && quizStarted && !isSubmitting) {
+        addWarning('Tab or window switched');
       }
     });
     
     addSafeEventListener(document, 'contextmenu', (e) => {
       e.preventDefault();
-      addWarning('Right click attempted');
+      addWarning('Right-click attempted');
     });
+    
+    // Detect copy/paste attempts
+    addSafeEventListener(document, 'copy', (e) => {
+      e.preventDefault();
+      addWarning('Copy attempt detected');
+    });
+    
+    addSafeEventListener(document, 'paste', (e) => {
+      e.preventDefault();
+      addWarning('Paste attempt detected');
+    });
+    
+    // Detect keyboard shortcuts
+    addSafeEventListener(document, 'keydown', (e) => {
+      // Detect Ctrl+C, Ctrl+V, Ctrl+X, Ctrl+P, Ctrl+S
+      if ((e.ctrlKey || e.metaKey) && ['c', 'v', 'x', 'p', 's', 'u'].includes(e.key.toLowerCase())) {
+        e.preventDefault();
+        addWarning(`Keyboard shortcut (Ctrl+${e.key.toUpperCase()}) detected`);
+      }
+      
+      // Detect F12 (Developer Tools)
+      if (e.key === 'F12') {
+        e.preventDefault();
+        addWarning('Developer tools attempted');
+      }
+    });
+  };
+
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${String(secs).padStart(2, '0')}`;
+  };
+
+  const getStatusChipClass = (type) => {
+    if (type === 'camera') {
+      return videoStream ? 'active' : 'inactive';
+    }
+    if (type === 'fullscreen') {
+      return fullscreen ? 'active' : 'inactive';
+    }
+    if (type === 'warnings') {
+      if (warningCount >= 3) return 'danger';
+      if (warningCount > 0) return 'warning';
+      return 'active';
+    }
+    return '';
   };
 
   if (loading) {
@@ -375,41 +527,35 @@ const ProctoredQuiz = () => {
                 <span className="requirement-icon">📹</span>
                 <div className="requirement-text">
                   <strong>Continuous Camera Monitoring</strong>
-                  <p>Face must remain visible at all times.</p>
+                  <p>Face must remain visible at all times. Camera access is mandatory.</p>
                 </div>
               </div>
               <div className="requirement-item">
                 <span className="requirement-icon">🎤</span>
                 <div className="requirement-text">
                   <strong>Audio Environment Monitoring</strong>
-                  <p>Background noise is monitored.</p>
+                  <p>Background noise is monitored for suspicious activity.</p>
                 </div>
               </div>
               <div className="requirement-item">
                 <span className="requirement-icon">🖥️</span>
                 <div className="requirement-text">
                   <strong>Locked Fullscreen Mode</strong>
-                  <p>Exiting fullscreen triggers warnings.</p>
+                  <p>Exiting fullscreen triggers warnings. Maximum 3 warnings allowed.</p>
                 </div>
               </div>
               <div className="requirement-item">
                 <span className="requirement-icon">⚠️</span>
                 <div className="requirement-text">
                   <strong>Zero Tolerance Policy</strong>
-                  <p>3 warnings = Automatic submission.</p>
+                  <p>3 warnings = Automatic submission. No exceptions.</p>
                 </div>
               </div>
             </div>
           </div>
 
           {startError && (
-            <div style={{
-              backgroundColor: '#fee2e2',
-              color: '#b91c1c',
-              padding: '1rem',
-              borderRadius: '0.5rem',
-              marginBottom: '1rem'
-            }}>
+            <div className="error-message">
               <strong>Error:</strong> {startError}
             </div>
           )}
@@ -433,127 +579,127 @@ const ProctoredQuiz = () => {
   }
 
   if (!submissionResult) {
-     const q = quiz.questions[currentQuestion];
+    const currentQ = quiz.questions[currentQuestion];
+    const answeredCount = answers.filter(ans => ans && ans !== '').length;
+    
     return (
       <div className="proctored-quiz-container quiz-active">
         <canvas ref={canvasRef} style={{ display: 'none' }} />
         
+        {/* HEADER - With Finish Button on Right */}
         <div className="quiz-header">
-          <div className="quiz-title-section">
-            <h2>{quiz.title}</h2>
-            <div className="timer-section">
-              <span className="timer-icon">⏱️</span>
-              <span className="timer">
-                {Math.floor(timeLeft / 60)}:{String(timeLeft % 60).padStart(2, '0')}
-              </span>
+          <div className="header-left">
+            <div className="quiz-name">{quiz.title}</div>
+            <div className="timer-box">
+              {formatTime(timeLeft)}
+            </div>
+            <div className="progress-container">
+              {quiz.questions.map((_, idx) => (
+                <div 
+                  key={idx} 
+                  className={`progress-dot ${idx === currentQuestion ? 'active' : ''} ${answers[idx] && answers[idx] !== '' ? 'completed' : ''}`}
+                  onClick={() => setCurrentQuestion(idx)}
+                >
+                  {idx + 1}
+                </div>
+              ))}
             </div>
           </div>
-          
-          <div className="proctoring-status">
-            <div className="status-item">
-              <span className={`status-indicator ${videoStream ? 'active' : 'inactive'}`}></span>
-              <span>Camera</span>
+          <button className="finish-top-btn" onClick={handleFinish}>
+            Finish Quiz
+          </button>
+        </div>
+
+        {/* BODY */}
+        <div className="quiz-body">
+          {/* LEFT - QUESTION PANEL */}
+          <div className="question-panel">
+            <div className="question-header">
+              <span className="question-number">Question {currentQuestion + 1} of {quiz.questions.length}</span>
+              <span className="total-marks">Marks: 1</span>
             </div>
-            <div className="status-item">
-              <span className={`status-indicator ${fullscreen ? 'active' : 'inactive'}`}></span>
-              <span>Fullscreen</span>
+            <div className="question-text">
+              {currentQ.question}
             </div>
-            <div className="status-item warning">
-              <span>⚠️ {warningCount}/3</span>
-            </div>
+            {currentQ.image && (
+              <div className="image-container">
+                <img src={currentQ.image} alt="Question illustration" />
+              </div>
+            )}
+          </div>
+
+          {/* RIGHT - ANSWER PANEL */}
+          <div className="answer-panel">
+            <h3>Your Answer</h3>
+            {currentQ.type === 'mcq' ? (
+              currentQ.options.map((opt, idx) => {
+                const optionLetter = String.fromCharCode(65 + idx);
+                return (
+                  <label key={idx} className="option-label">
+                    <input
+                      type="radio"
+                      name={`question-${currentQuestion}`}
+                      checked={answers[currentQuestion] === optionLetter}
+                      onChange={() => handleAnswerChange(currentQuestion, optionLetter)}
+                    />
+                    <span>
+                      <strong>{optionLetter}.</strong> {opt}
+                    </span>
+                  </label>
+                );
+              })
+            ) : (
+              <input
+                className="blank-input"
+                type="text"
+                value={answers[currentQuestion] || ''}
+                onChange={(e) => handleAnswerChange(currentQuestion, e.target.value)}
+                placeholder="Type your answer here..."
+              />
+            )}
           </div>
         </div>
-        
-        <div className="quiz-main-content">
 
-  {/* LEFT SIDE (QUESTION AREA) */}
-  <div className="questions-container">
+        {/* FOOTER - Simple Navigation */}
+        <div className="quiz-footer">
+          <button 
+            className="footer-btn gray" 
+            onClick={handlePrevious}
+            disabled={currentQuestion === 0}
+          >
+            Previous
+          </button>
+          <button className="footer-btn gray" onClick={handleSkip}>
+            Skip
+          </button>
+          <button 
+            className="footer-btn blue" 
+            onClick={handleNext}
+            disabled={currentQuestion === quiz.questions.length - 1}
+          >
+            Next
+          </button>
+        </div>
 
-  <div className="question-block">
+        {/* Video Container */}
+        <div className="video-container">
+          <video
+            ref={videoRef}
+            autoPlay
+            muted
+            playsInline
+            className="proctoring-video"
+          />
+        </div>
 
-    <h3 className="question-title">
-      Question {currentQuestion + 1}
-    </h3>
-
-    <p className="question-text">{q.question}</p>
-
-    {q.type === 'mcq' ? (
-      <div className="options-container">
-        {q.options.map((opt, j) => {
-  const optionLetter = String.fromCharCode(65 + j); // A, B, C, D
-
-  return (
-    <label key={j} className="option-label">
-      <input
-        type="radio"
-        value={optionLetter}
-        checked={answers[currentQuestion] === optionLetter}
-        onChange={() => handleAnswerChange(currentQuestion, optionLetter)}
-      />
-      <span className="option-text">
-        <strong>{optionLetter}.</strong> {opt}
-      </span>
-    </label>
-  );
-})}
-      </div>
-    ) : (
-      <input
-        className="blank-input"
-        type="text"
-        value={answers[currentQuestion] || ''}
-        onChange={(e) =>
-          handleAnswerChange(currentQuestion, e.target.value)
-        }
-        placeholder="Type your answer"
-      />
-    )}
-
-  </div>
-
-  <button onClick={handleSubmit} className="submit-quiz-btn">
-    Submit
-  </button>
-
-</div>
-
-
-  {/* RIGHT SIDE (QUESTION PALETTE) */}
-  <div className="palette-container">
-    <h3>Questions</h3>
-
-    <div className="palette-grid">
-  {quiz.questions.map((_, i) => (
-    <div
-      key={i}
-      className="palette-item"
-      onClick={() => setCurrentQuestion(i)}
-    >
-      {i + 1}
-    </div>
-  ))}
-</div>
-  </div>
-
-</div>
-
-
-<div className="video-container">
-  <video
-    ref={videoRef}
-    autoPlay
-    muted
-    playsInline
-    className="proctoring-video"
-  />
-</div> 
-
-
+        {/* Warnings Panel */}
         {warnings.length > 0 && (
           <div className="warnings-panel">
             <h4>⚠️ Warnings ({warningCount}/3)</h4>
-            {warnings.map((w, i) => (
-              <div key={i}>{w.timestamp}: {w.message}</div>
+            {warnings.slice(-5).map((w, i) => (
+              <div key={i} className="warning-item">
+                {w.timestamp}: {w.message}
+              </div>
             ))}
           </div>
         )}
@@ -561,12 +707,18 @@ const ProctoredQuiz = () => {
     );
   }
 
+  // Result Screen
   return (
     <div className="proctored-quiz-container result-screen">
       <div className="result-content">
         <h1>✅ Quiz Submitted!</h1>
         <div className="score-circle">
           <span className="score-number">{submissionResult.percentage}%</span>
+        </div>
+        <div className="score-details">
+          <p>Score: {submissionResult.score} / {quiz.questions.length}</p>
+          <p>Correct Answers: {submissionResult.correctAnswers}</p>
+          <p>Percentage: {submissionResult.percentage}%</p>
         </div>
         <button onClick={() => navigate('/student/quizzes')} className="back-btn">
           ← Back to Quizzes
