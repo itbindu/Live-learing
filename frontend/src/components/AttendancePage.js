@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Calendar, Clock, Users, Download, ArrowLeft, Video } from 'lucide-react';
+import { API_URL } from '../api/config';
 import './AttendancePage.css';
 
 const AttendancePage = ({ role = 'student' }) => {
@@ -9,89 +10,84 @@ const AttendancePage = ({ role = 'student' }) => {
   const [loading, setLoading] = useState(true);
   const [selectedMeeting, setSelectedMeeting] = useState(null);
   const [meetingDetails, setMeetingDetails] = useState(null);
+  const [allMeetings, setAllMeetings] = useState([]);
   const navigate = useNavigate();
 
   useEffect(() => {
-    loadAttendanceRecords();
+    loadAllAttendanceFromServer();
   }, [role]);
 
-  const loadAttendanceRecords = () => {
+  // ============ LOAD FROM MONGODB (NOT localStorage) ============
+  const loadAllAttendanceFromServer = async () => {
     setLoading(true);
     try {
-      const allRecords = [];
-      const processedKeys = new Set(); // To avoid duplicates
+      // Fetch all meetings from server
+      const response = await fetch(`${API_URL}/api/attendance/all`);
+      const data = await response.json();
       
+      if (data.success && data.meetings) {
+        // Group records by meetingId
+        const meetingsMap = new Map();
+        
+        data.meetings.forEach(meeting => {
+          if (meeting.records && meeting.records.length > 0) {
+            meetingsMap.set(meeting.meetingId, {
+              meetingId: meeting.meetingId,
+              records: meeting.records,
+              allParticipants: meeting.records.length
+            });
+          }
+        });
+        
+        // Convert to array and sort by most recent
+        const meetings = Array.from(meetingsMap.values());
+        meetings.sort((a, b) => {
+          const dateA = a.records[0]?.joinedAt ? new Date(a.records[0].joinedAt) : new Date(0);
+          const dateB = b.records[0]?.joinedAt ? new Date(b.records[0].joinedAt) : new Date(0);
+          return dateB - dateA;
+        });
+        
+        setAttendanceRecords(meetings);
+        setAllMeetings(meetings);
+      }
+    } catch (error) {
+      console.error('Error loading attendance from server:', error);
+      // Fallback to localStorage if server fails
+      loadFromLocalStorage();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fallback function (kept for compatibility)
+  const loadFromLocalStorage = () => {
+    try {
+      const allRecords = [];
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
         if (key && key.startsWith('attendance_')) {
-          try {
-            const meetingId = key.replace('attendance_', '');
-            
-            // Skip if we already processed this meeting ID
-            if (processedKeys.has(meetingId)) continue;
-            processedKeys.add(meetingId);
-            
-            const storedData = localStorage.getItem(key);
-            if (!storedData) continue;
-            
-            let records = [];
-            try {
-              records = JSON.parse(storedData);
-              // Ensure records is an array
-              if (!Array.isArray(records)) {
-                console.warn(`Records for ${meetingId} is not an array:`, records);
-                records = records ? [records] : []; // Convert to array if it's a single object
-              }
-            } catch (parseError) {
-              console.error(`Error parsing records for ${meetingId}:`, parseError);
-              continue;
-            }
-            
-            if (role === 'student') {
-              const studentId = localStorage.getItem('userId') || localStorage.getItem('currentStudentId');
-              const studentName = localStorage.getItem('currentStudentName');
-              const studentEmail = localStorage.getItem('studentEmail');
-              
-              // Filter records for this student
-              const myRecords = records.filter(r => 
-                r && (r.userId === studentId || 
-                     (r.userName && studentName && r.userName === studentName) ||
-                     (r.email && studentEmail && r.email === studentEmail))
-              );
-              
-              if (myRecords.length > 0) {
-                allRecords.push({
-                  meetingId,
-                  records: myRecords,
-                  allParticipants: records.length
-                });
-              }
-            } else {
-              // Teacher sees all records
-              allRecords.push({
-                meetingId,
-                records: records,
-                allParticipants: records.length
-              });
-            }
-          } catch (e) {
-            console.error('Error processing attendance record:', e);
+          const meetingId = key.replace('attendance_', '');
+          const records = JSON.parse(localStorage.getItem(key) || '[]');
+          
+          if (records && Array.isArray(records) && records.length > 0) {
+            allRecords.push({
+              meetingId,
+              records: records,
+              allParticipants: records.length
+            });
           }
         }
       }
-
-      // Sort by most recent first
+      
       allRecords.sort((a, b) => {
-        const dateA = a.records && a.records[0]?.joinedAt ? new Date(a.records[0].joinedAt) : new Date(0);
-        const dateB = b.records && b.records[0]?.joinedAt ? new Date(b.records[0].joinedAt) : new Date(0);
+        const dateA = a.records[0]?.joinedAt ? new Date(a.records[0].joinedAt) : new Date(0);
+        const dateB = b.records[0]?.joinedAt ? new Date(b.records[0].joinedAt) : new Date(0);
         return dateB - dateA;
       });
-
+      
       setAttendanceRecords(allRecords);
     } catch (error) {
-      console.error('Error loading attendance records:', error);
-    } finally {
-      setLoading(false);
+      console.error('Error loading from localStorage:', error);
     }
   };
 
@@ -101,12 +97,10 @@ const AttendancePage = ({ role = 'student' }) => {
   };
 
   const calculateMeetingDuration = (records) => {
-    // Safety check - ensure records is an array
     if (!records || !Array.isArray(records) || records.length === 0) {
       return '00:00:00';
     }
     
-    // Filter out invalid records
     const validRecords = records.filter(r => r && r.joinedAt);
     if (validRecords.length === 0) return '00:00:00';
     
@@ -144,14 +138,12 @@ const AttendancePage = ({ role = 'student' }) => {
     if (!record) return '00:00:00';
     
     if (record.duration) {
-      // If duration is already calculated (in seconds)
       const hours = Math.floor(record.duration / 3600);
       const minutes = Math.floor((record.duration % 3600) / 60);
       const seconds = record.duration % 60;
       return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
     }
     
-    // Calculate from timestamps
     if (record.joinedAt) {
       const joinTime = new Date(record.joinedAt).getTime();
       const leaveTime = record.leftAt ? new Date(record.leftAt).getTime() : Date.now();
@@ -193,7 +185,7 @@ const AttendancePage = ({ role = 'student' }) => {
       if (!record) return [];
       return [
         record.userName || 'Unknown',
-        record.role || 'student',
+        record.role === 'teacher' ? 'Host' : 'Student',
         record.email || '',
         formatDateTime(record.joinedAt),
         record.leftAt ? formatDateTime(record.leftAt) : 'Still Present',
@@ -238,7 +230,7 @@ const AttendancePage = ({ role = 'student' }) => {
     const csvRows = allData.map(record => [
       record.meetingId || '',
       record.userName || 'Unknown',
-      record.role || 'student',
+      record.role === 'teacher' ? 'Host' : 'Student',
       record.email || '',
       formatDateTime(record.joinedAt),
       record.leftAt ? formatDateTime(record.leftAt) : 'Still Present',
@@ -269,7 +261,7 @@ const AttendancePage = ({ role = 'student' }) => {
           </button>
           <h1>
             <Calendar size={24} />
-            {role === 'teacher' ? 'Meeting Attendance Records' : 'My Attendance History'}
+            {role === 'teacher' ? 'All Meeting Attendance Records' : 'Meeting Attendance'}
           </h1>
         </div>
         {attendanceRecords.length > 0 && (
@@ -346,7 +338,7 @@ const AttendancePage = ({ role = 'student' }) => {
 
                   <div className="attendance-table-container">
                     <div className="table-header-actions">
-                      <h3>Participant Attendance</h3>
+                      <h3>Participant Attendance (All Users)</h3>
                       <button 
                         className="export-btn"
                         onClick={() => exportAttendanceCSV(selectedMeeting, meetingDetails)}
@@ -376,7 +368,7 @@ const AttendancePage = ({ role = 'student' }) => {
                                <span className="you-badge">You</span>}
                             </div>
                             <div className="table-cell">
-                              <span className={`role-badge ${record.role || 'student'}`}>
+                              <span className={`role-badge ${record.role === 'teacher' ? 'teacher' : 'student'}`}>
                                 {record.role === 'teacher' ? 'Host' : 'Student'}
                               </span>
                             </div>
@@ -415,7 +407,6 @@ const AttendancePage = ({ role = 'student' }) => {
                   const meetingStart = records[0]?.joinedAt;
                   const meetingEnd = records[records.length - 1]?.leftAt;
                   const duration = calculateMeetingDuration(records);
-                  const participantCount = role === 'teacher' ? allParticipants : 1;
                   
                   return (
                     <div key={meetingId} className="meeting-card">
@@ -426,7 +417,7 @@ const AttendancePage = ({ role = 'student' }) => {
                         </div>
                         <span className="participant-count">
                           <Users size={14} />
-                          {participantCount} {participantCount === 1 ? 'Participant' : 'Participants'}
+                          {allParticipants} {allParticipants === 1 ? 'Participant' : 'Participants'}
                         </span>
                       </div>
                       
@@ -457,34 +448,20 @@ const AttendancePage = ({ role = 'student' }) => {
                         </div>
                       </div>
                       
-                      {role === 'student' && records[0] && (
-                        <div className="my-attendance-summary">
-                          <div className="my-duration">
-                            <Clock size={12} />
-                            My attendance: <strong>{calculateUserDuration(records[0])}</strong>
-                          </div>
-                          <div className={`my-status ${records[0].leftAt ? 'left' : 'present'}`}>
-                            {records[0].leftAt ? 'Left meeting' : 'Still in meeting'}
-                          </div>
-                        </div>
-                      )}
-                      
                       <div className="meeting-card-footer">
                         <button 
                           className="view-details-btn"
                           onClick={() => viewMeetingDetails(meetingId, records)}
                         >
-                          View Details
+                          View All Participants ({allParticipants})
                         </button>
-                        {role === 'teacher' && (
-                          <button 
-                            className="export-btn small"
-                            onClick={() => exportAttendanceCSV(meetingId, records)}
-                          >
-                            <Download size={14} />
-                            Export
-                          </button>
-                        )}
+                        <button 
+                          className="export-btn small"
+                          onClick={() => exportAttendanceCSV(meetingId, records)}
+                        >
+                          <Download size={14} />
+                          Export
+                        </button>
                       </div>
                     </div>
                   );

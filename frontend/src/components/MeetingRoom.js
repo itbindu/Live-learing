@@ -61,7 +61,7 @@ const MeetingRoom = ({ role = 'student' }) => {
   const peerConnections = useRef({});
   const screenPeerConnections = useRef({});
   const videoGridRef = useRef(null);
-  const hasRecordedJoin = useRef(false); // Prevent duplicate join on refresh
+  const hasRecordedJoin = useRef(false);
 
   // STUN Servers
   const configuration = {
@@ -85,71 +85,59 @@ const MeetingRoom = ({ role = 'student' }) => {
     iceCandidatePoolSize: 10
   };
 
-  // ============ ATTENDANCE FUNCTIONS ============
+  // ============ ATTENDANCE FUNCTION ============
   const saveAttendanceToLocalStorage = (type, record) => {
     try {
       const storageKey = `attendance_${meetingId}`;
-      let records = [];
-      const existing = localStorage.getItem(storageKey);
-      
-      if (existing) {
-        records = JSON.parse(existing);
-        if (!Array.isArray(records)) {
-          records = [];
-        }
-      }
-      
-      if (type === 'join') {
-        // Check if already have this user active (no duplicate joins)
-        const existingIndex = records.findIndex(r => 
-          r.userId === record.userId && !r.leftAt && r.isActive !== false
+      let records = JSON.parse(localStorage.getItem(storageKey) || "[]");
+
+      if (type === "join") {
+        const existingIndex = records.findIndex(
+          r => r.userId === record.userId && !r.leftAt
         );
-        
-        // Skip duplicate join
+
+        // ❌ prevent duplicate join
         if (existingIndex !== -1) {
           console.log("⚠️ Already active, skip duplicate join for:", record.userName);
           return;
         }
-        
-        // New session
+
         records.push({
           ...record,
           meetingId,
-          joinedAt: record.joinedAt || new Date().toISOString(),
-          isActive: true,
-          leftAt: null,
-          duration: null
+          joinedAt: new Date().toISOString(),
+          isActive: true
         });
-        
         console.log('✅ Attendance join recorded for:', record.userName);
-      } 
-      else if (type === 'leave') {
-        const existingIndex = records.findIndex(r => 
-          r.userId === record.userId && !r.leftAt && r.isActive === true
+      }
+
+      if (type === "leave") {
+        const existingIndex = records.findIndex(
+          r => r.userId === record.userId && !r.leftAt
         );
-        
+
         if (existingIndex !== -1) {
-          const leftAt = record.leftAt || new Date().toISOString();
-          const joinedAt = records[existingIndex].joinedAt;
-          const duration = Math.round((new Date(leftAt) - new Date(joinedAt)) / 1000);
-          
+          const leftAt = new Date().toISOString();
+
           records[existingIndex] = {
             ...records[existingIndex],
-            leftAt: leftAt,
-            duration: duration,
+            leftAt,
+            duration: Math.round(
+              (new Date(leftAt) - new Date(records[existingIndex].joinedAt)) / 1000
+            ),
             isActive: false
           };
-          console.log('✅ Attendance leave recorded for:', record.userName, 'Duration:', duration, 'seconds');
+          console.log('✅ Attendance leave recorded for:', record.userName, 'Duration:', records[existingIndex].duration, 'seconds');
         }
       }
-      
+
       localStorage.setItem(storageKey, JSON.stringify(records));
       
-      // Also try to save to server
+      // Also try to save to server via API
       saveAttendanceToServer(meetingId, type, record);
       
     } catch (error) {
-      console.error('Error saving attendance to localStorage:', error);
+      console.error('Error saving attendance:', error);
     }
   };
 
@@ -174,6 +162,19 @@ const MeetingRoom = ({ role = 'student' }) => {
       console.error('Error saving attendance to server:', error);
     }
   };
+
+  // ============ JOIN TRACKING ============
+  useEffect(() => {
+    if (!userId || !userName || hasRecordedJoin.current) return;
+    
+    saveAttendanceToLocalStorage("join", {
+      userId,
+      userName,
+      email: userEmail,
+      role
+    });
+    hasRecordedJoin.current = true;
+  }, [userId, userName]);
 
   // ============ MEDIA FUNCTIONS ============
   const initLocalStream = async () => {
@@ -649,17 +650,23 @@ const MeetingRoom = ({ role = 'student' }) => {
     socketRef.current?.emit('mute-participant', { meetingId, userId: participantId });
   };
 
+  // ================= LEAVE FUNCTION =================
   const leaveMeetingOnly = () => {
-    // Record attendance on leave
-    saveAttendanceToLocalStorage('leave', {
+    // ✅ ONLY HERE leave is recorded
+    saveAttendanceToLocalStorage("leave", {
       userId,
       userName,
-      role,
-      leftAt: new Date().toISOString()
+      role
     });
-    
+
     if (isScreenSharing) stopScreenSharing();
-    navigate(role === 'teacher' ? '/teacher/dashboard' : '/student/dashboard');
+
+    socketRef.current?.emit("leave-meeting", {
+      meetingId,
+      userId
+    });
+
+    navigate(role === "teacher" ? "/teacher/dashboard" : "/student/dashboard");
   };
 
   const endMeetingForAll = () => {
@@ -679,71 +686,6 @@ const MeetingRoom = ({ role = 'student' }) => {
     socketRef.current?.emit('end-meeting', { meetingId });
     navigate('/teacher/dashboard');
   };
-
-  // ============ ATTENDANCE TRACKING - JOIN ON MOUNT ============
-  useEffect(() => {
-    // Only record join once per session
-    if (!hasRecordedJoin.current && userId && userName) {
-      const record = {
-        userId: userId,
-        userName: userName,
-        email: userEmail,
-        role: role,
-        joinedAt: new Date().toISOString()
-      };
-      
-      // Check if already have an active session
-      const storageKey = `attendance_${meetingId}`;
-      const existingRecords = JSON.parse(localStorage.getItem(storageKey) || '[]');
-      const alreadyActive = existingRecords.some(r => 
-        r.userId === userId && !r.leftAt && r.isActive !== false
-      );
-      
-      if (!alreadyActive) {
-        console.log("📝 Recording initial join for:", userName);
-        saveAttendanceToLocalStorage("join", record);
-        hasRecordedJoin.current = true;
-      }
-    }
-  }, [userId, userName, userEmail, role, meetingId]);
-
-  // ============ ATTENDANCE TRACKING - LEAVE ON UNMOUNT/TAB CLOSE ============
-  useEffect(() => {
-    const handleLeave = () => {
-      if (userId && userName) {
-        console.log("📝 Recording leave for:", userName);
-        saveAttendanceToLocalStorage("leave", {
-          userId: userId,
-          userName: userName,
-          role: role,
-          leftAt: new Date().toISOString()
-        });
-      }
-    };
-
-    // Handle tab/window close
-    window.addEventListener("beforeunload", handleLeave);
-    
-    // Handle page hide (for mobile/tablet)
-    window.addEventListener("pagehide", handleLeave);
-    
-    // Handle visibility change (tab switch - optional, but good for accuracy)
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "hidden") {
-        handleLeave();
-      }
-    };
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-
-    return () => {
-      // Record leave when component unmounts (user leaves meeting)
-      handleLeave();
-      // Cleanup listeners
-      window.removeEventListener("beforeunload", handleLeave);
-      window.removeEventListener("pagehide", handleLeave);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-    };
-  }, [userId, userName, role, meetingId]);
 
   // ============ INITIALIZE ============
   useEffect(() => {
@@ -872,7 +814,6 @@ const MeetingRoom = ({ role = 'student' }) => {
     // Attendance recording from server
     socket.on('attendance-recorded', (data) => {
       console.log('📊 Attendance recorded from server:', data);
-      // Don't double-record - server is just confirming
     });
 
     socket.on('receive-offer', handleReceiveOffer);
@@ -951,19 +892,49 @@ const MeetingRoom = ({ role = 'student' }) => {
       ));
     });
 
-    socket.on('meeting-ended', () => {
-      alert('Meeting ended by host');
-      
-      // Record final attendance on meeting end
-      saveAttendanceToLocalStorage('leave', {
-        userId: storedId,
-        userName: userName,
-        role: role,
-        leftAt: new Date().toISOString()
-      });
-      
-      navigate(role === 'teacher' ? '/teacher/dashboard' : '/student/dashboard');
-    });
+    socket.on('meeting-ended', (data) => {
+  console.log('🏁 Meeting ended by host:', data);
+  alert('Meeting has ended by the host. You will be redirected to dashboard.');
+  
+  // Force record final attendance on meeting end
+  const finalRecord = {
+    userId: storedId,
+    userName: userName,
+    email: userEmail,
+    role: role,
+    leftAt: new Date().toISOString(),
+    meetingEnded: true
+  };
+  
+  // Save to localStorage
+  saveAttendanceToLocalStorage('leave', finalRecord);
+  
+  // Also save to server
+  saveAttendanceToServer('leave', finalRecord);
+  
+  // Stop any ongoing screen sharing
+  if (isScreenSharing) {
+    stopScreenSharing();
+  }
+  
+  // Clean up local media
+  if (localStreamRef.current) {
+    localStreamRef.current.getTracks().forEach(track => track.stop());
+  }
+  
+  if (screenStreamRef.current) {
+    screenStreamRef.current.getTracks().forEach(track => track.stop());
+  }
+  
+  // Close all peer connections
+  Object.values(peerConnections.current).forEach(pc => pc.close());
+  Object.values(screenPeerConnections.current).forEach(pc => pc.close());
+  
+  // Navigate back to dashboard
+  setTimeout(() => {
+    navigate(role === 'teacher' ? '/teacher/dashboard' : '/student/dashboard');
+  }, 1000);
+});
 
     // Cleanup on unmount
     return () => {

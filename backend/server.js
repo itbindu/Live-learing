@@ -456,10 +456,56 @@ io.on('connection', (socket) => {
     }
   });
 
-  // ============ MEETING END ============
+  // ============ MEETING END (FIXED - Marks all participants as left) ============
   socket.on('end-meeting', async ({ meetingId }) => {
-    console.log(`⛔ Meeting ended: ${meetingId}`);
+    console.log(`⛔ Meeting ending: ${meetingId}`);
     
+    const meeting = meetings.get(meetingId);
+    
+    if (meeting) {
+      console.log(`📊 Processing ${meeting.size} participants for meeting end...`);
+      
+      // Mark all users as left when meeting ends
+      for (const [socketId, user] of meeting.entries()) {
+        const leftAt = new Date();
+        
+        // Calculate duration
+        const joinedAt = user.joinedAt || new Date();
+        const duration = Math.round((leftAt - new Date(joinedAt)) / 1000);
+        
+        // Save leave record for each user in database
+        try {
+          await saveAttendanceLog(meetingId, user, 'leave');
+          console.log(`✅ Marked ${user.userName} as left (duration: ${duration}s)`);
+        } catch (error) {
+          console.error(`Error saving leave for ${user.userName}:`, error);
+        }
+        
+        // Emit attendance recorded event to each user
+        io.to(socketId).emit('attendance-recorded', {
+          type: 'leave',
+          meetingId,
+          record: {
+            userId: user.userId,
+            userName: user.userName,
+            email: user.email,
+            role: user.role,
+            leftAt: leftAt.toISOString(),
+            duration: duration,
+            isActive: false,
+            meetingEnded: true
+          }
+        });
+      }
+      
+      // Clear the meeting from memory
+      meetings.delete(meetingId);
+      console.log(`✅ Meeting ${meetingId} cleared from active meetings`);
+    } else {
+      console.log(`⚠️ Meeting ${meetingId} not found in active meetings, but will update database`);
+    }
+    
+    // Update meeting in database
     try {
       await Meeting.findOneAndUpdate(
         { meetingId },
@@ -473,8 +519,13 @@ io.on('connection', (socket) => {
       console.error('Error ending meeting in database:', error);
     }
     
-    io.to(meetingId).emit('meeting-ended');
-    meetings.delete(meetingId);
+    // Notify all users in the meeting room that meeting has ended
+    io.to(meetingId).emit('meeting-ended', { 
+      meetingId,
+      endedAt: new Date().toISOString()
+    });
+    
+    console.log(`✅ Meeting ${meetingId} ended successfully - all participants marked as left`);
   });
 
 });
