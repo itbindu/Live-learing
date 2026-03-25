@@ -55,6 +55,7 @@ const TakeQuiz = () => {
         const safeTimeLimit = quizData.timeLimit > 0 ? quizData.timeLimit : 60;
         setTimeLeft(safeTimeLimit * 60);
         
+        // Initialize answers array - for MCQ questions, store empty string initially
         setAnswers(new Array(quizData.questions.length).fill(''));
       } catch (err) {
         console.error('Fetch quiz error:', err);
@@ -89,9 +90,15 @@ const TakeQuiz = () => {
     }
   }, [timeLeft]);
 
-  const handleAnswerChange = (questionIndex, value) => {
+  const handleAnswerChange = (questionIndex, value, optionLetter = null) => {
     const updated = [...answers];
-    updated[questionIndex] = value;
+    if (optionLetter !== null) {
+      // For MCQ, store the letter (A, B, C, D)
+      updated[questionIndex] = optionLetter;
+    } else {
+      // For blank, store the text answer
+      updated[questionIndex] = value;
+    }
     setAnswers(updated);
   };
 
@@ -161,18 +168,21 @@ const TakeQuiz = () => {
               <p><strong>Q{i + 1}:</strong> {q.question}</p>
 
               {q.type === 'mcq' ? (
-                q.options.map((opt, j) => (
-                  <label key={j} className="option-label">
-                    <input
-                      type="radio"
-                      name={`q-${i}`}
-                      value={opt}
-                      checked={answers[i] === opt}
-                      onChange={() => handleAnswerChange(i, opt)}
-                    />
-                    {opt}
-                  </label>
-                ))
+                q.options.map((opt, j) => {
+                  const optionLetter = String.fromCharCode(65 + j); // A, B, C, D
+                  return (
+                    <label key={j} className="option-label">
+                      <input
+                        type="radio"
+                        name={`q-${i}`}
+                        value={optionLetter}
+                        checked={answers[i] === optionLetter}
+                        onChange={() => handleAnswerChange(i, opt, optionLetter)}
+                      />
+                      <strong>{optionLetter}.</strong> {opt}
+                    </label>
+                  );
+                })
               ) : (
                 <input
                   type="text"
@@ -212,21 +222,37 @@ const TakeQuiz = () => {
       {showReview && (
         <div className="review-section">
           <h4>Question Review</h4>
-          {quiz.questions.map((q, i) => (
-            <div key={i} className="result-question">
-              <p><strong>Q{i + 1}:</strong> {q.question}</p>
-              <p>
-                Your answer:{' '}
-                <span className={answers[i] === submissionResult.correctAnswers[i] ? 'correct' : 'wrong'}>
-                  {answers[i] || '(not answered)'}
-                </span>
-              </p>
-              <p>
-                Correct answer:{' '}
-                <span className="correct">{submissionResult.correctAnswers[i]}</span>
-              </p>
-            </div>
-          ))}
+          {quiz.questions.map((q, i) => {
+            let displayAnswer = answers[i] || '(not answered)';
+            
+            // For MCQ questions, display the actual option text in review
+            if (q.type === 'mcq' && answers[i]) {
+              const optionIndex = answers[i].charCodeAt(0) - 65;
+              if (q.options[optionIndex]) {
+                displayAnswer = `${answers[i]}. ${q.options[optionIndex]}`;
+              }
+            }
+            
+            return (
+              <div key={i} className="result-question">
+                <p><strong>Q{i + 1}:</strong> {q.question}</p>
+                <p>
+                  Your answer:{' '}
+                  <span className={answers[i] === submissionResult.correctAnswers[i] ? 'correct' : 'wrong'}>
+                    {displayAnswer}
+                  </span>
+                </p>
+                <p>
+                  Correct answer:{' '}
+                  <span className="correct">
+                    {q.type === 'mcq' && submissionResult.correctAnswers[i] ? 
+                      `${submissionResult.correctAnswers[i]}. ${q.options[submissionResult.correctAnswers[i].charCodeAt(0) - 65]}` 
+                      : submissionResult.correctAnswers[i]}
+                  </span>
+                </p>
+              </div>
+            );
+          })}
         </div>
       )}
 

@@ -33,7 +33,6 @@ const allowedOrigins = [
 
 app.use(cors({
   origin: function(origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
     if (allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV !== 'production') {
       callback(null, true);
@@ -99,27 +98,73 @@ const Meeting = require('./Models/Meeting');
 // Helper function to save attendance to database
 async function saveAttendanceLog(meetingId, userInfo, type = 'join') {
   try {
-    const meeting = await Meeting.findOne({ meetingId });
+    let meeting = await Meeting.findOne({ meetingId });
+    
     if (!meeting) {
-      console.log(`Meeting ${meetingId} not found for attendance log`);
-      return;
+      console.log(`⚠️ Meeting ${meetingId} not found, creating new meeting record...`);
+      meeting = new Meeting({
+        meetingId,
+        title: "Virtual Classroom",
+        teacherId: userInfo.teacherId || null,
+        participants: [],
+        attendance: []
+      });
+      await meeting.save();
+      console.log(`✅ Created new meeting record for ${meetingId}`);
     }
 
     if (type === 'join') {
-      await meeting.userJoined({
-        userId: userInfo.userId,
-        userName: userInfo.userName,
-        email: userInfo.email,
-        role: userInfo.role,
-        joinedAt: userInfo.joinedAt
-      });
-      console.log(`✅ Attendance joined: ${userInfo.userName} in meeting ${meetingId}`);
-    } else if (type === 'leave') {
-      await meeting.userLeft(userInfo.userId, new Date());
-      console.log(`✅ Attendance left: ${userInfo.userName} from meeting ${meetingId}`);
+      const existingRecord = meeting.attendance.find(
+        a => a.userId === userInfo.userId && a.isActive === true
+      );
+
+      if (!existingRecord) {
+        meeting.attendance.push({
+          userId: userInfo.userId,
+          userName: userInfo.userName,
+          email: userInfo.email || '',
+          role: userInfo.role || 'student',
+          joinedAt: userInfo.joinedAt || new Date(),
+          isActive: true,
+          leftAt: null,
+          duration: null
+        });
+        
+        meeting.participants.push({
+          name: userInfo.userName,
+          email: userInfo.email || '',
+          joinedAt: new Date()
+        });
+        
+        await meeting.save();
+        console.log(`✅ Attendance JOIN recorded: ${userInfo.userName} in meeting ${meetingId}`);
+      } else {
+        console.log(`⚠️ User ${userInfo.userName} already has active session in ${meetingId}`);
+      }
+    } 
+    else if (type === 'leave') {
+      const activeRecord = meeting.attendance.find(
+        a => a.userId === userInfo.userId && a.isActive === true
+      );
+
+      if (activeRecord) {
+        const leftAt = new Date();
+        const joinTime = new Date(activeRecord.joinedAt).getTime();
+        const leaveTime = leftAt.getTime();
+        const duration = Math.round((leaveTime - joinTime) / 1000);
+
+        activeRecord.leftAt = leftAt;
+        activeRecord.duration = duration;
+        activeRecord.isActive = false;
+        
+        await meeting.save();
+        console.log(`✅ Attendance LEAVE recorded: ${userInfo.userName} from meeting ${meetingId}, Duration: ${duration}s`);
+      } else {
+        console.log(`⚠️ No active session found for ${userInfo.userName} in ${meetingId}`);
+      }
     }
   } catch (error) {
-    console.error('Error saving attendance:', error);
+    console.error('❌ Error saving attendance:', error);
   }
 }
 
@@ -456,7 +501,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // ============ MEETING END (FIXED - Marks all participants as left) ============
+  // ============ MEETING END ============
   socket.on('end-meeting', async ({ meetingId }) => {
     console.log(`⛔ Meeting ending: ${meetingId}`);
     
@@ -465,15 +510,11 @@ io.on('connection', (socket) => {
     if (meeting) {
       console.log(`📊 Processing ${meeting.size} participants for meeting end...`);
       
-      // Mark all users as left when meeting ends
       for (const [socketId, user] of meeting.entries()) {
         const leftAt = new Date();
-        
-        // Calculate duration
         const joinedAt = user.joinedAt || new Date();
         const duration = Math.round((leftAt - new Date(joinedAt)) / 1000);
         
-        // Save leave record for each user in database
         try {
           await saveAttendanceLog(meetingId, user, 'leave');
           console.log(`✅ Marked ${user.userName} as left (duration: ${duration}s)`);
@@ -481,7 +522,6 @@ io.on('connection', (socket) => {
           console.error(`Error saving leave for ${user.userName}:`, error);
         }
         
-        // Emit attendance recorded event to each user
         io.to(socketId).emit('attendance-recorded', {
           type: 'leave',
           meetingId,
@@ -498,14 +538,12 @@ io.on('connection', (socket) => {
         });
       }
       
-      // Clear the meeting from memory
       meetings.delete(meetingId);
       console.log(`✅ Meeting ${meetingId} cleared from active meetings`);
     } else {
-      console.log(`⚠️ Meeting ${meetingId} not found in active meetings, but will update database`);
+      console.log(`⚠️ Meeting ${meetingId} not found in active meetings`);
     }
     
-    // Update meeting in database
     try {
       await Meeting.findOneAndUpdate(
         { meetingId },
@@ -519,13 +557,12 @@ io.on('connection', (socket) => {
       console.error('Error ending meeting in database:', error);
     }
     
-    // Notify all users in the meeting room that meeting has ended
     io.to(meetingId).emit('meeting-ended', { 
       meetingId,
       endedAt: new Date().toISOString()
     });
     
-    console.log(`✅ Meeting ${meetingId} ended successfully - all participants marked as left`);
+    console.log(`✅ Meeting ${meetingId} ended successfully`);
   });
 
 });

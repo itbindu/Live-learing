@@ -16,6 +16,13 @@ const MeetingRoom = ({ role = 'student' }) => {
   const { meetingId } = useParams();
   const navigate = useNavigate();
   
+  // ✅ ADD THIS DEBUG LOGGING RIGHT HERE
+  console.log("🎯 MeetingRoom Component - Meeting ID from URL:", meetingId);
+  console.log("🎯 MeetingRoom Component - Role:", role);
+  console.log("🎯 MeetingRoom Component - BACKEND_URL:", API_URL);
+  
+  // ... rest of your existing code continues
+  
   // ============ ENVIRONMENT VARIABLE ============
   const BACKEND_URL = API_URL;
   
@@ -88,6 +95,11 @@ const MeetingRoom = ({ role = 'student' }) => {
   // ============ ATTENDANCE FUNCTION ============
   const saveAttendanceToLocalStorage = (type, record) => {
     try {
+      if (!record || !record.userId || !record.userName) {
+        console.error('❌ Invalid record for attendance:', record);
+        return;
+      }
+      
       const storageKey = `attendance_${meetingId}`;
       let records = JSON.parse(localStorage.getItem(storageKey) || "[]");
 
@@ -96,19 +108,23 @@ const MeetingRoom = ({ role = 'student' }) => {
           r => r.userId === record.userId && !r.leftAt
         );
 
-        // ❌ prevent duplicate join
         if (existingIndex !== -1) {
           console.log("⚠️ Already active, skip duplicate join for:", record.userName);
           return;
         }
 
         records.push({
-          ...record,
-          meetingId,
+          userId: record.userId,
+          userName: record.userName,
+          email: record.email || '',
+          role: record.role || role,
+          meetingId: meetingId,
           joinedAt: new Date().toISOString(),
-          isActive: true
+          isActive: true,
+          leftAt: null,
+          duration: null
         });
-        console.log('✅ Attendance join recorded for:', record.userName);
+        console.log('✅ Attendance join recorded in localStorage for:', record.userName);
       }
 
       if (type === "leave") {
@@ -118,63 +134,111 @@ const MeetingRoom = ({ role = 'student' }) => {
 
         if (existingIndex !== -1) {
           const leftAt = new Date().toISOString();
+          const joinTime = new Date(records[existingIndex].joinedAt).getTime();
+          const leaveTime = new Date(leftAt).getTime();
+          const duration = Math.round((leaveTime - joinTime) / 1000);
 
           records[existingIndex] = {
             ...records[existingIndex],
             leftAt,
-            duration: Math.round(
-              (new Date(leftAt) - new Date(records[existingIndex].joinedAt)) / 1000
-            ),
+            duration: duration,
             isActive: false
           };
-          console.log('✅ Attendance leave recorded for:', record.userName, 'Duration:', records[existingIndex].duration, 'seconds');
+          console.log('✅ Attendance leave recorded in localStorage for:', record.userName, 'Duration:', duration, 'seconds');
         }
       }
 
       localStorage.setItem(storageKey, JSON.stringify(records));
       
-      // Also try to save to server via API
+      // Also try to save to server
       saveAttendanceToServer(meetingId, type, record);
       
     } catch (error) {
-      console.error('Error saving attendance:', error);
+      console.error('Error saving attendance to localStorage:', error);
     }
   };
 
   const saveAttendanceToServer = async (meetingId, type, record) => {
     try {
-      const token = localStorage.getItem('token');
-      if (!token) return;
+      if (!record || !record.userId || !record.userName) {
+        console.error('❌ Cannot save to server: Invalid record data', record);
+        return;
+      }
       
-      await fetch(`${BACKEND_URL}/api/attendance/record`, {
+      const token = localStorage.getItem('token');
+      
+      console.log(`📤 Sending attendance to server: ${type} for ${record.userName}`);
+      
+      const response = await fetch(`${BACKEND_URL}/api/attendance/record`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          ...(token && { 'Authorization': `Bearer ${token}` })
         },
         body: JSON.stringify({
           meetingId,
           type,
-          record
+          record: {
+            userId: record.userId,
+            userName: record.userName,
+            email: record.email || userEmail,
+            role: record.role || role,
+            joinedAt: record.joinedAt || new Date().toISOString(),
+            leftAt: record.leftAt || null
+          }
         })
       });
+      
+      const data = await response.json();
+      
+      if (response.ok) {
+        console.log(`✅ Attendance saved to server: ${type} for ${record.userName}`);
+      } else {
+        console.error(`❌ Server error (${response.status}):`, data.error);
+      }
     } catch (error) {
-      console.error('Error saving attendance to server:', error);
+      console.error('❌ Error saving attendance to server:', error);
     }
   };
+
+  // ============ FETCH ATTENDANCE FROM SERVER ============
+  useEffect(() => {
+    const fetchAttendance = async () => {
+      try {
+        const response = await fetch(`${BACKEND_URL}/api/attendance/${meetingId}`);
+        const data = await response.json();
+        
+        if (data.success && data.records && data.records.length > 0) {
+          console.log(`✅ Found ${data.records.length} attendance records from server`);
+          const storageKey = `attendance_${meetingId}`;
+          localStorage.setItem(storageKey, JSON.stringify(data.records));
+        }
+      } catch (error) {
+        console.error('❌ Error fetching attendance:', error);
+      }
+    };
+    
+    if (meetingId) {
+      fetchAttendance();
+    }
+  }, [meetingId, BACKEND_URL]);
 
   // ============ JOIN TRACKING ============
   useEffect(() => {
     if (!userId || !userName || hasRecordedJoin.current) return;
     
-    saveAttendanceToLocalStorage("join", {
-      userId,
-      userName,
+    const joinRecord = {
+      userId: userId,
+      userName: userName,
       email: userEmail,
-      role
-    });
+      role: role,
+      joinedAt: new Date().toISOString()
+    };
+    
+    console.log('📝 Recording join for:', userName);
+    saveAttendanceToLocalStorage("join", joinRecord);
     hasRecordedJoin.current = true;
-  }, [userId, userName]);
+  }, [userId, userName, userEmail, role]);
 
   // ============ MEDIA FUNCTIONS ============
   const initLocalStream = async () => {
@@ -652,12 +716,15 @@ const MeetingRoom = ({ role = 'student' }) => {
 
   // ================= LEAVE FUNCTION =================
   const leaveMeetingOnly = () => {
-    // ✅ ONLY HERE leave is recorded
-    saveAttendanceToLocalStorage("leave", {
-      userId,
-      userName,
-      role
-    });
+    const leaveRecord = {
+      userId: userId,
+      userName: userName,
+      role: role,
+      leftAt: new Date().toISOString()
+    };
+    
+    console.log('📝 Recording leave for:', userName);
+    saveAttendanceToLocalStorage("leave", leaveRecord);
 
     if (isScreenSharing) stopScreenSharing();
 
@@ -672,15 +739,24 @@ const MeetingRoom = ({ role = 'student' }) => {
   const endMeetingForAll = () => {
     if (role !== 'teacher') return;
     
-    // Record attendance for all participants on meeting end
     participants.forEach(participant => {
-      saveAttendanceToLocalStorage('leave', {
+      const leaveRecord = {
         userId: participant.userId,
         userName: participant.userName,
         role: participant.role,
         leftAt: new Date().toISOString()
-      });
+      };
+      saveAttendanceToLocalStorage('leave', leaveRecord);
     });
+    
+    // Also record the teacher's own leave
+    const teacherLeaveRecord = {
+      userId: userId,
+      userName: userName,
+      role: role,
+      leftAt: new Date().toISOString()
+    };
+    saveAttendanceToLocalStorage('leave', teacherLeaveRecord);
     
     if (isScreenSharing) stopScreenSharing();
     socketRef.current?.emit('end-meeting', { meetingId });
@@ -689,7 +765,6 @@ const MeetingRoom = ({ role = 'student' }) => {
 
   // ============ INITIALIZE ============
   useEffect(() => {
-    // Generate persistent user ID (NO DUPLICATES ON REFRESH)
     let storedId = localStorage.getItem("meetingUserId");
     
     if (!storedId) {
@@ -699,7 +774,6 @@ const MeetingRoom = ({ role = 'student' }) => {
     
     setUserId(storedId);
     
-    // Get user info from localStorage based on role
     if (role === 'teacher') {
       const teacherData = JSON.parse(localStorage.getItem('teacherUser') || '{}');
       const fullName = `${teacherData.firstName || ''} ${teacherData.lastName || ''}`.trim();
@@ -707,7 +781,6 @@ const MeetingRoom = ({ role = 'student' }) => {
       setUserEmail(teacherData.email || '');
       localStorage.setItem('teacherName', fullName || 'Teacher');
     } else {
-      // For students
       const studentName = localStorage.getItem('currentStudentName') || 
                          localStorage.getItem('studentName') || 
                          `Student_${Math.floor(Math.random() * 1000)}`;
@@ -722,7 +795,6 @@ const MeetingRoom = ({ role = 'student' }) => {
     const storedTopic = localStorage.getItem(`meetingTopic_${meetingId}`) || 'Virtual Classroom';
     setMeetingTopic(storedTopic);
 
-    // Initialize socket connection
     const socket = io(BACKEND_URL, {
       transports: ['websocket', 'polling'],
       reconnection: true,
@@ -735,10 +807,8 @@ const MeetingRoom = ({ role = 'student' }) => {
     
     socketRef.current = socket;
 
-    // Initialize local media stream
     initLocalStream();
 
-    // Socket event handlers
     socket.on('connect', () => {
       console.log('✅ Connected to server at:', BACKEND_URL);
       setConnectionStatus('connected');
@@ -764,7 +834,6 @@ const MeetingRoom = ({ role = 'student' }) => {
       setConnectionStatus('connecting');
     });
 
-    // Receive all existing users when joining
     socket.on('all-users', (users) => {
       console.log('👥 All users received:', users);
       const usersWithNames = users.map(user => ({
@@ -783,7 +852,6 @@ const MeetingRoom = ({ role = 'student' }) => {
       }, 1000);
     });
 
-    // Handle new user joining
     socket.on('user-joined', (user) => {
       console.log('👤 User joined with data:', user);
       if (user.userId === storedId) return;
@@ -811,7 +879,6 @@ const MeetingRoom = ({ role = 'student' }) => {
       }
     });
 
-    // Attendance recording from server
     socket.on('attendance-recorded', (data) => {
       console.log('📊 Attendance recorded from server:', data);
     });
@@ -820,7 +887,6 @@ const MeetingRoom = ({ role = 'student' }) => {
     socket.on('receive-answer', handleReceiveAnswer);
     socket.on('receive-ice-candidate', handleReceiveICECandidate);
     
-    // Screen sharing events
     socket.on('screen-share-started', ({ userId: sharerId, userName: sharerName }) => {
       console.log('📺 Screen sharing started by:', sharerName);
       setScreenShareParticipant({ userId: sharerId, userName: sharerName });
@@ -854,7 +920,6 @@ const MeetingRoom = ({ role = 'student' }) => {
     socket.on('receive-screen-answer', handleReceiveScreenAnswer);
     socket.on('receive-screen-ice-candidate', handleReceiveScreenICECandidate);
     
-    // Handle user leaving
     socket.on('user-left', (leftUserId) => {
       console.log('👋 User left:', leftUserId);
       
@@ -893,50 +958,40 @@ const MeetingRoom = ({ role = 'student' }) => {
     });
 
     socket.on('meeting-ended', (data) => {
-  console.log('🏁 Meeting ended by host:', data);
-  alert('Meeting has ended by the host. You will be redirected to dashboard.');
-  
-  // Force record final attendance on meeting end
-  const finalRecord = {
-    userId: storedId,
-    userName: userName,
-    email: userEmail,
-    role: role,
-    leftAt: new Date().toISOString(),
-    meetingEnded: true
-  };
-  
-  // Save to localStorage
-  saveAttendanceToLocalStorage('leave', finalRecord);
-  
-  // Also save to server
-  saveAttendanceToServer('leave', finalRecord);
-  
-  // Stop any ongoing screen sharing
-  if (isScreenSharing) {
-    stopScreenSharing();
-  }
-  
-  // Clean up local media
-  if (localStreamRef.current) {
-    localStreamRef.current.getTracks().forEach(track => track.stop());
-  }
-  
-  if (screenStreamRef.current) {
-    screenStreamRef.current.getTracks().forEach(track => track.stop());
-  }
-  
-  // Close all peer connections
-  Object.values(peerConnections.current).forEach(pc => pc.close());
-  Object.values(screenPeerConnections.current).forEach(pc => pc.close());
-  
-  // Navigate back to dashboard
-  setTimeout(() => {
-    navigate(role === 'teacher' ? '/teacher/dashboard' : '/student/dashboard');
-  }, 1000);
-});
+      console.log('🏁 Meeting ended by host:', data);
+      alert('Meeting has ended by the host. You will be redirected to dashboard.');
+      
+      const finalRecord = {
+        userId: storedId,
+        userName: userName,
+        email: userEmail,
+        role: role,
+        leftAt: new Date().toISOString(),
+        meetingEnded: true
+      };
+      
+      saveAttendanceToLocalStorage('leave', finalRecord);
+      
+      if (isScreenSharing) {
+        stopScreenSharing();
+      }
+      
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach(track => track.stop());
+      }
+      
+      if (screenStreamRef.current) {
+        screenStreamRef.current.getTracks().forEach(track => track.stop());
+      }
+      
+      Object.values(peerConnections.current).forEach(pc => pc.close());
+      Object.values(screenPeerConnections.current).forEach(pc => pc.close());
+      
+      setTimeout(() => {
+        navigate(role === 'teacher' ? '/teacher/dashboard' : '/student/dashboard');
+      }, 1000);
+    });
 
-    // Cleanup on unmount
     return () => {
       Object.values(peerConnections.current).forEach(pc => pc.close());
       Object.values(screenPeerConnections.current).forEach(pc => pc.close());
@@ -959,7 +1014,6 @@ const MeetingRoom = ({ role = 'student' }) => {
 
   return (
     <div className="meeting-room">
-      {/* Connection Banner */}
       {connectionStatus !== 'connected' && (
         <div className={`connection-banner ${connectionStatus}`}>
           {connectionStatus === 'connecting' && (
@@ -977,7 +1031,6 @@ const MeetingRoom = ({ role = 'student' }) => {
         </div>
       )}
 
-      {/* Header */}
       <header className="meeting-header">
         <div className="header-left">
           <span className="meeting-time">
@@ -1024,17 +1077,12 @@ const MeetingRoom = ({ role = 'student' }) => {
         </div>
       </header>
 
-      {/* Main Content */}
       <main className="meeting-main">
         <div className={`video-container ${showParticipants || showChat || showBreakout ? 'with-sidebar' : ''}`}>
-          
-          {/* Video Grid */}
           <div 
             className={`video-grid ${layout} ${hasScreenShare ? 'has-screen-share' : ''}`}
             ref={videoGridRef}
           >
-            
-            {/* Local Video */}
             <div className="video-tile local" id="local-tile">
               <video
                 ref={localVideoRef}
@@ -1063,7 +1111,6 @@ const MeetingRoom = ({ role = 'student' }) => {
               </div>
             </div>
 
-            {/* Remote Videos */}
             {participants.map((participant) => (
               <div 
                 key={participant.userId}
@@ -1108,7 +1155,6 @@ const MeetingRoom = ({ role = 'student' }) => {
           </div>
         </div>
 
-        {/* Participants Sidebar */}
         {showParticipants && (
           <div className="sidebar participants-sidebar">
             <div className="sidebar-header">
@@ -1121,7 +1167,6 @@ const MeetingRoom = ({ role = 'student' }) => {
               </button>
             </div>
             <div className="participants-list">
-              {/* Current user */}
               <div className="participant-item current">
                 <div className="avatar-small">
                   {userName?.charAt(0).toUpperCase()}
@@ -1134,7 +1179,6 @@ const MeetingRoom = ({ role = 'student' }) => {
                 </div>
               </div>
               
-              {/* Other participants */}
               {participants.map(p => (
                 <div key={p.userId} className="participant-item">
                   <div className="avatar-small">
@@ -1164,7 +1208,6 @@ const MeetingRoom = ({ role = 'student' }) => {
           </div>
         )}
 
-        {/* Chat Sidebar */}
         {showChat && (
           <div className="sidebar chat-sidebar">
             <div className="sidebar-header">
@@ -1203,7 +1246,6 @@ const MeetingRoom = ({ role = 'student' }) => {
           </div>
         )}
 
-        {/* Breakout Room Sidebar */}
         {showBreakout && (
           <div className="sidebar breakout-sidebar">
             <div className="sidebar-header">
@@ -1226,7 +1268,6 @@ const MeetingRoom = ({ role = 'student' }) => {
           </div>
         )}
 
-        {/* Leave Modal */}
         {showLeaveOptions && (
           <div className="modal-overlay">
             <div className="leave-modal">
@@ -1258,7 +1299,6 @@ const MeetingRoom = ({ role = 'student' }) => {
         )}
       </main>
 
-      {/* Footer */}
       <footer className="meeting-footer">
         <div className="footer-left">
           <button 
@@ -1314,7 +1354,6 @@ const MeetingRoom = ({ role = 'student' }) => {
             {unreadMessages > 0 && <span className="badge">{unreadMessages}</span>}
           </button>
 
-          {/* Breakout Rooms Button - Only visible for teachers */}
           {role === 'teacher' && (
             <button 
               className={`control-btn ${showBreakout ? 'active' : ''}`} 

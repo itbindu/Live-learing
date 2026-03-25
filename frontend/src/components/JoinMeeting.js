@@ -15,23 +15,23 @@ const JoinMeeting = () => {
 
   const navigate = useNavigate();
 
-  // ✅ ADD THIS
-  const API_URL =
-    process.env.REACT_APP_API_URL || "http://localhost:5000";
+  const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000";
 
   useEffect(() => {
+    console.log("🎯 JoinMeeting - Meeting ID from URL:", meetingId);
     fetchMeeting();
   }, [meetingId]);
 
   const fetchMeeting = async () => {
     try {
       const response = await axios.get(
-        `${API_URL}/api/students/meeting/${meetingId}` // ✅ FIXED
+        `${API_URL}/api/students/meeting/${meetingId}`
       );
 
       setMeeting(response.data.meeting);
       setParticipants(response.data.meeting.participants || []);
     } catch (error) {
+      console.error("❌ Error fetching meeting:", error);
       setMessage("Meeting not found or inactive.");
     } finally {
       setLoading(false);
@@ -44,7 +44,7 @@ const JoinMeeting = () => {
 
     try {
       const response = await axios.post(
-        `${API_URL}/api/students/join-meeting/${meetingId}`, // ✅ FIXED
+        `${API_URL}/api/students/join-meeting/${meetingId}`,
         { name, email }
       );
 
@@ -53,8 +53,12 @@ const JoinMeeting = () => {
       setJoined(true);
 
       localStorage.setItem("currentStudentName", name);
+      localStorage.setItem("studentEmail", email);
+      localStorage.setItem("currentStudentId", `student_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
 
-      navigate(`/student/meeting-room/${meetingId}`);
+      console.log("🚀 Navigating to meeting room with ID:", meetingId);
+      navigate(`/meeting-room/${meetingId}`);
+      
     } catch (error) {
       setMessage(
         "Failed to join: " +
@@ -70,7 +74,6 @@ const JoinMeeting = () => {
 
   return (
     <div className="join-page">
-
       <div
         className="back-arrow"
         onClick={() => navigate("/student/dashboard")}
@@ -87,11 +90,13 @@ const JoinMeeting = () => {
             Hosted by {meeting.teacherId?.firstName}{" "}
             {meeting.teacherId?.lastName}
           </p>
+          <p className="meeting-id-info" style={{ fontSize: "12px", color: "#666", marginTop: "5px" }}>
+            Meeting ID: {meetingId}
+          </p>
         </div>
 
         {!joined ? (
           <form onSubmit={handleJoin}>
-
             <div className="input-group">
               <label>Your Name</label>
               <input
@@ -117,7 +122,6 @@ const JoinMeeting = () => {
             <button className="join-btn" type="submit">
               Join Meeting
             </button>
-
           </form>
         ) : (
           <div className="welcome">

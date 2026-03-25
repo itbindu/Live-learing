@@ -3,20 +3,118 @@ const express = require("express");
 const router = express.Router();
 const Meeting = require("../Models/Meeting");
 
-// ================= SAVE ATTENDANCE TO MONGODB =================
-router.post("/record", async (req, res) => {
-  const { meetingId, type, record } = req.body;
+// ================= GET ALL MEETINGS WITH ATTENDANCE (MUST COME FIRST) =================
+router.get("/all", async (req, res) => {
+  console.log("📊 Fetching ALL meetings with attendance");
+  console.log("=" .repeat(50));
 
-  if (!meetingId || !type || !record) {
-    return res.status(400).json({ error: "Missing required fields" });
+  try {
+    // Find ALL meetings - don't filter anything
+    const meetings = await Meeting.find({}).sort({ createdAt: -1 });
+    
+    console.log(`✅ Found ${meetings.length} total meetings in database`);
+    
+    // Log each meeting for debugging
+    meetings.forEach((meeting, index) => {
+      console.log(`\n📌 Meeting ${index + 1}:`);
+      console.log(`   ID: ${meeting.meetingId}`);
+      console.log(`   Title: ${meeting.title}`);
+      console.log(`   Attendance count: ${meeting.attendance?.length || 0}`);
+      console.log(`   Is Active: ${meeting.isActive}`);
+    });
+    
+    // Format the response
+    const meetingData = meetings.map(meeting => ({
+      meetingId: meeting.meetingId,
+      title: meeting.title,
+      records: meeting.attendance || [],
+      participants: meeting.participants || [],
+      createdAt: meeting.createdAt,
+      isActive: meeting.isActive,
+      endedAt: meeting.endedAt
+    }));
+    
+    console.log("\n✅ Sending response with", meetingData.length, "meetings");
+    
+    res.json({ 
+      success: true, 
+      meetings: meetingData 
+    });
+  } catch (error) {
+    console.error("❌ Error fetching all meetings:", error);
+    res.status(500).json({ 
+      error: "Internal server error", 
+      details: error.message,
+      success: false 
+    });
+  }
+});
+
+// ================= GET ATTENDANCE FOR A SPECIFIC MEETING =================
+router.get("/:meetingId", async (req, res) => {
+  const { meetingId } = req.params;
+  console.log(`📊 Fetching attendance for meeting: ${meetingId}`);
+
+  // Skip if it's the "all" endpoint (already handled above)
+  if (meetingId === "all") {
+    console.log("⚠️ Skipping - this should be handled by /all route");
+    return;
   }
 
   try {
-    // Find the meeting in MongoDB
+    const meeting = await Meeting.findOne({ meetingId });
+    
+    if (!meeting) {
+      console.log(`⚠️ No meeting found for ${meetingId}`);
+      return res.json({ 
+        success: true, 
+        records: [],
+        meeting: null
+      });
+    }
+    
+    console.log(`✅ Found meeting: ${meetingId}`);
+    console.log(`   Title: ${meeting.title}`);
+    console.log(`   Attendance records: ${meeting.attendance?.length || 0}`);
+    console.log(`   Is Active: ${meeting.isActive}`);
+    
+    res.json({ 
+      success: true, 
+      records: meeting.attendance || [],
+      meeting: {
+        id: meeting.meetingId,
+        title: meeting.title,
+        isActive: meeting.isActive,
+        createdAt: meeting.createdAt,
+        endedAt: meeting.endedAt
+      }
+    });
+  } catch (error) {
+    console.error("❌ Error fetching attendance:", error);
+    res.status(500).json({ error: "Internal server error", success: false });
+  }
+});
+
+// ================= SAVE ATTENDANCE TO MONGODB =================
+router.post("/record", async (req, res) => {
+  console.log("=" .repeat(50));
+  console.log("📝 ATTENDANCE RECORD REQUEST RECEIVED");
+  console.log("Meeting ID:", req.body.meetingId);
+  console.log("Type:", req.body.type);
+  console.log("User:", req.body.record?.userName);
+  console.log("=" .repeat(50));
+  
+  const { meetingId, type, record } = req.body;
+
+  if (!meetingId || !type || !record) {
+    return res.status(400).json({ error: "Missing required fields", success: false });
+  }
+
+  try {
     let meeting = await Meeting.findOne({ meetingId });
 
     if (!meeting) {
-      // Create meeting if it doesn't exist
+      console.log(`⚠️ Meeting ${meetingId} not found, creating new...`);
       meeting = new Meeting({
         meetingId,
         title: record.meetingTitle || "Virtual Classroom",
@@ -24,6 +122,11 @@ router.post("/record", async (req, res) => {
         participants: [],
         attendance: []
       });
+      await meeting.save();
+      console.log(`✅ Created new meeting: ${meetingId}`);
+    } else {
+      console.log(`✅ Found existing meeting: ${meetingId}`);
+      console.log(`   Current attendance count: ${meeting.attendance?.length || 0}`);
     }
 
     if (type === "join") {
@@ -44,14 +147,17 @@ router.post("/record", async (req, res) => {
           duration: null
         });
         
-        // Also add to participants array for compatibility
         meeting.participants.push({
           name: record.userName,
           email: record.email || "",
           joinedAt: new Date()
         });
         
-        console.log(`✅ Attendance join recorded for ${record.userName} in meeting ${meetingId}`);
+        await meeting.save();
+        console.log(`✅ Attendance join recorded for ${record.userName}`);
+        console.log(`   New attendance count: ${meeting.attendance.length}`);
+      } else {
+        console.log(`⚠️ User ${record.userName} already has active attendance`);
       }
     }
 
@@ -71,54 +177,49 @@ router.post("/record", async (req, res) => {
         activeRecord.duration = duration;
         activeRecord.isActive = false;
         
-        console.log(`✅ Attendance leave recorded for ${record.userName} in meeting ${meetingId}, Duration: ${duration}s`);
+        await meeting.save();
+        console.log(`✅ Attendance leave recorded for ${record.userName}`);
+        console.log(`   Duration: ${duration} seconds`);
+      } else {
+        console.log(`⚠️ No active attendance found for ${record.userName}`);
       }
     }
 
-    await meeting.save();
     res.json({ success: true, records: meeting.attendance });
 
   } catch (error) {
-    console.error("Error saving attendance:", error);
-    res.status(500).json({ error: "Internal server error" });
+    console.error("❌ Error saving attendance:", error);
+    res.status(500).json({ error: "Internal server error", success: false });
   }
 });
 
-// ================= GET ATTENDANCE FOR A MEETING =================
-router.get("/:meetingId", async (req, res) => {
-  const { meetingId } = req.params;
+// ================= GET TEACHER'S MEETINGS WITH ATTENDANCE =================
+router.get("/teacher/:teacherId", async (req, res) => {
+  const { teacherId } = req.params;
+  console.log(`📊 Fetching attendance for teacher: ${teacherId}`);
 
   try {
-    const meeting = await Meeting.findOne({ meetingId });
+    const meetings = await Meeting.find({ teacherId }).sort({ createdAt: -1 });
     
-    if (!meeting) {
-      return res.json({ records: [] });
-    }
+    console.log(`✅ Found ${meetings.length} meetings for teacher`);
     
-    res.json({ records: meeting.attendance || [] });
-  } catch (error) {
-    console.error("Error fetching attendance:", error);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-
-// ================= GET ALL MEETINGS WITH ATTENDANCE =================
-router.get("/all", async (req, res) => {
-  try {
-    const meetings = await Meeting.find({}).sort({ createdAt: -1 });
-    
-    const meetingData = meetings.map(meeting => ({
+    const formattedMeetings = meetings.map(meeting => ({
       meetingId: meeting.meetingId,
+      title: meeting.title,
       records: meeting.attendance || [],
       participants: meeting.participants || [],
       createdAt: meeting.createdAt,
-      isActive: meeting.isActive
+      isActive: meeting.isActive,
+      endedAt: meeting.endedAt
     }));
     
-    res.json({ success: true, meetings: meetingData });
+    res.json({ 
+      success: true, 
+      meetings: formattedMeetings 
+    });
   } catch (error) {
-    console.error("Error fetching all meetings:", error);
-    res.status(500).json({ error: "Internal server error" });
+    console.error("❌ Error fetching teacher attendance:", error);
+    res.status(500).json({ success: false, error: "Failed to fetch attendance" });
   }
 });
 
@@ -144,7 +245,6 @@ router.get("/summary/:meetingId", async (req, res) => {
     const attendance = meeting.attendance || [];
     const totalParticipants = attendance.length;
     const activeParticipants = attendance.filter(a => a.isActive === true).length;
-    
     const completedSessions = attendance.filter(a => a.duration);
     const totalDuration = completedSessions.reduce((sum, a) => sum + (a.duration || 0), 0);
     const averageDuration = completedSessions.length > 0 
@@ -162,6 +262,24 @@ router.get("/summary/:meetingId", async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching meeting summary:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ================= DELETE MEETING ATTENDANCE =================
+router.delete("/clear/:meetingId", async (req, res) => {
+  const { meetingId } = req.params;
+
+  try {
+    const result = await Meeting.findOneAndDelete({ meetingId });
+    
+    if (result) {
+      res.json({ success: true, message: `Meeting ${meetingId} attendance cleared` });
+    } else {
+      res.json({ success: true, message: "No meeting found to clear" });
+    }
+  } catch (error) {
+    console.error("Error clearing attendance:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });

@@ -60,7 +60,8 @@ function App() {
           {/* Public LMS Routes */}
           <Route path="/teacher/lms" element={<LMSPage />} />
           <Route path="/student/lms" element={<StudentLMS />} />
-          <Route path="/teacher/student-approval" element={<StudentApprovalSection />} /> {/* Temporary public route for testing - FIXED: moved to protected route below */}
+          <Route path="/teacher/student-approval" element={<StudentApprovalSection />} />
+          
           {/* Teacher Quiz Routes */}
           <Route path="/teacher/quizzes" element={<TeacherQuizList />} />
           <Route path="/teacher/leaderboard/:quizId" element={<Leaderboard />} />
@@ -75,6 +76,7 @@ function App() {
           <Route path="/student/leaderboard" element={<StudentLeaderboard />} />
           <Route path="/proctored-quiz/:quizId" element={<ProctoredQuiz />} />
           <Route path="/teacher/quiz-list" element={<TeacherQuizList />} />
+          
           {/* Teacher Protected Routes */}
           <Route
             path="/teacher/dashboard"
@@ -94,7 +96,7 @@ function App() {
             }
           />
 
-          {/* Dedicated student management page - FIXED: using StudentApprovalSection instead of ManageStudents */}
+          {/* Dedicated student management page */}
           <Route
             path="/teacher/students"
             element={
@@ -141,8 +143,9 @@ function App() {
             }
           />
 
+          {/* ✅ FIXED: Changed from /student/meeting-room/:meetingId to /meeting-room/:meetingId */}
           <Route
-            path="/student/meeting-room/:meetingId"
+            path="/meeting-room/:meetingId"
             element={
               <ProtectedRoute redirectTo="/student/login">
                 <MeetingRoom role="student" />
